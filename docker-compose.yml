@@ -1,0 +1,69 @@
+version: "3.9"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Dota 2 Drafter — Multi-container setup
+#
+# Services:
+#   backend  — FastAPI (Python) serving the suggest API on port 8000
+#   frontend — Vite + React served via Nginx on port 3000
+#
+# Usage:
+#   docker compose up --build          # first time or after code changes
+#   docker compose up                  # subsequent starts (< 5 seconds)
+#   docker compose down                # stop everything
+#   docker compose logs backend        # view API logs
+#   docker compose logs frontend       # view nginx logs
+#
+# The pkl model files live in ./model/ on the HOST and are mounted
+# read-only into the backend container.  Retrain in the notebook,
+# then just restart the backend — no rebuild needed.
+#   docker compose restart backend
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  # ── API (FastAPI + LightGBM) ────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: dota_backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mount the model directory so you can retrain without rebuilding
+      - ./model:/app/model:ro
+    environment:
+      - PYTHONUNBUFFERED=1
+      - MODEL_DIR=/app/model
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - dota_net
+
+  # ── Frontend (React/Vite built → Nginx) ─────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        # Injected at build time so the JS bundle knows the API URL
+        VITE_API_URL: http://localhost:8000
+    container_name: dota_frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - dota_net
+
+networks:
+  dota_net:
+    driver: bridge
