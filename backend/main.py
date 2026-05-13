@@ -39,7 +39,7 @@ try:
              f"{len(synergy_matrix)} synergy pairs")
 except RuntimeError as e:
     log.error(str(e))
-    # Don't crash on startup — health check will fail until model is ready
+    
     hero_map = matchup_matrix = synergy_matrix = {}
     hero_roles = hero_avg_matchup = hero_winrate = {}
 
@@ -63,7 +63,6 @@ class SuggestResponse(BaseModel):
     picks: list[HeroSuggestion]
 
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
 def get_roles(hero_id: int) -> list[str]:
     r = hero_roles.get(hero_id, ["offlane"])
     return [x.lower() for x in (r if isinstance(r, list) else [r])]
@@ -139,7 +138,6 @@ def build_reasons(hero_id, enemy_ids, enemy_names, ally_ids, ally_names):
     return reasons
 
 
-# ── Routes ────────────────────────────────────────────────────────────────────
 @app.get("/health")
 def health():
     ready = len(hero_map) > 0

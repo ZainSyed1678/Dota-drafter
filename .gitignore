@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# Virtual environments
+venv/
+.venv/
+env/
+.env
+
+# Model files — large binaries, don't push to GitHub
+# Regenerate by running the notebook
+model/*.pkl
+model1/
+
+# Node / Frontend build artifacts
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Backend
+backend/__pycache__/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+*.log
+
+/app
