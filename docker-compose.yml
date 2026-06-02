@@ -53,7 +53,7 @@ services:
       dockerfile: Dockerfile
       args:
         # Injected at build time so the JS bundle knows the API URL
-        VITE_API_URL: http://localhost:8000
+        VITE_API_URL: http://192.168.1.11:8000
     container_name: dota_frontend
     restart: unless-stopped
     ports:
