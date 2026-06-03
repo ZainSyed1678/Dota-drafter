@@ -46,6 +46,34 @@ services:
     networks:
       - dota_net
 
+# DATABASE USING Postgres
+  postgres:
+    image: postgres:17
+
+    container_name: dota_postgres
+
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_DB: dota
+      POSTGRES_USER: dota
+      POSTGRES_PASSWORD: dota
+
+    ports:
+      - "5432:5432"
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+    networks:
+      - dota_net
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dota -d dota"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # ── Frontend (React/Vite built → Nginx) ─────────────────────────────────────
   frontend:
     build:
@@ -63,6 +91,9 @@ services:
         condition: service_healthy
     networks:
       - dota_net
+
+volumes:
+  postgres_data:
 
 networks:
   dota_net:
