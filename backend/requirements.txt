@@ -10,3 +10,5 @@ psycopg[binary]==3.2.1
 SQLAlchemy==2.0.36
 
 redis==5.0.8
+
+prometheus-client==0.20.0

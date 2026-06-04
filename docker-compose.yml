@@ -111,6 +111,26 @@ services:
     networks:
       - dota_net
 
+  prometheus:
+    image: prom/prometheus
+
+    container_name: dota_prometheus
+
+    restart: unless-stopped
+
+    ports:
+      - "9090:9090"
+
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+
+    networks:
+      - dota_net
+
+    depends_on:
+      backend:
+        condition: service_healthy
+
 volumes:
   postgres_data:
 

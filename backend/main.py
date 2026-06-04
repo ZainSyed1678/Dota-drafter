@@ -7,6 +7,18 @@ from services.cache_service import (
 
 from repositories.hero_repository import hero_repository
 from services.recommendation_engine import engine
+from time import perf_counter
+
+from prometheus_client import generate_latest
+from prometheus_client import CONTENT_TYPE_LATEST
+from fastapi import Response
+
+from services.metrics import (
+    REQUEST_COUNT,
+    CACHE_HITS,
+    CACHE_MISSES,
+    SUGGEST_LATENCY
+)
 
 
 app = FastAPI()
@@ -78,6 +90,9 @@ def debug():
     response_model=SuggestResponse
 )
 def suggest(req: DraftRequest):
+    REQUEST_COUNT.inc()
+
+    start = perf_counter()
 
     cache_key = (
         f"enemy:{','.join(sorted(req.enemy))}"
@@ -90,6 +105,8 @@ def suggest(req: DraftRequest):
 
     if cached:
 
+        CACHE_HITS.inc()
+
         print(
             f"REDIS HIT: {cache_key}"
         )
@@ -101,9 +118,7 @@ def suggest(req: DraftRequest):
             ]
         )
 
-    print(
-        f"REDIS MISS: {cache_key}"
-    )
+    CACHE_MISSES.inc()
 
     picks = engine.suggest(
         enemy_names=req.enemy,
@@ -115,10 +130,22 @@ def suggest(req: DraftRequest):
         picks,
         ttl=3600
     )
+    SUGGEST_LATENCY.observe(
+    perf_counter() - start
+)
 
     return SuggestResponse(
         picks=[
             HeroSuggestion(**pick)
             for pick in picks
         ]
+    )
+
+
+@app.get("/metrics")
+def metrics():
+
+    return Response(
+        generate_latest(),
+        media_type=CONTENT_TYPE_LATEST
     )
