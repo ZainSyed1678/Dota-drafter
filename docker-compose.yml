@@ -130,6 +130,24 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+  
+
+  grafana:
+    image: grafana/grafana
+
+    container_name: dota_grafana
+
+    restart: unless-stopped
+
+    ports:
+      - "3001:3000"
+
+    networks:
+      - dota_net
+
+    depends_on:
+      - prometheus
+
 
 volumes:
   postgres_data:

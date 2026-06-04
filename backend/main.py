@@ -90,6 +90,7 @@ def debug():
     response_model=SuggestResponse
 )
 def suggest(req: DraftRequest):
+
     REQUEST_COUNT.inc()
 
     start = perf_counter()
@@ -103,12 +104,19 @@ def suggest(req: DraftRequest):
         cache_key
     )
 
+    # ─────────────────────────────
+    # Cache Hit
+    # ─────────────────────────────
     if cached:
 
         CACHE_HITS.inc()
 
         print(
             f"REDIS HIT: {cache_key}"
+        )
+
+        SUGGEST_LATENCY.observe(
+            perf_counter() - start
         )
 
         return SuggestResponse(
@@ -118,7 +126,14 @@ def suggest(req: DraftRequest):
             ]
         )
 
+    # ─────────────────────────────
+    # Cache Miss
+    # ─────────────────────────────
     CACHE_MISSES.inc()
+
+    print(
+        f"REDIS MISS: {cache_key}"
+    )
 
     picks = engine.suggest(
         enemy_names=req.enemy,
@@ -130,9 +145,10 @@ def suggest(req: DraftRequest):
         picks,
         ttl=3600
     )
+
     SUGGEST_LATENCY.observe(
-    perf_counter() - start
-)
+        perf_counter() - start
+    )
 
     return SuggestResponse(
         picks=[
@@ -140,12 +156,10 @@ def suggest(req: DraftRequest):
             for pick in picks
         ]
     )
-
-
 @app.get("/metrics")
 def metrics():
 
     return Response(
-        generate_latest(),
+        content=generate_latest(),
         media_type=CONTENT_TYPE_LATEST
     )
