@@ -8,3 +8,5 @@ scikit-learn==1.4.2
 
 psycopg[binary]==3.2.1
 SQLAlchemy==2.0.36
+
+redis==5.0.8

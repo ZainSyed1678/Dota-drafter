@@ -22,6 +22,25 @@ version: "3.9"
 
 services:
 
+  redis:
+    image: redis:7
+
+    container_name: dota_redis
+
+    restart: unless-stopped
+
+    ports:
+      - "6379:6379"
+
+    networks:
+      - dota_net
+
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # ── API (FastAPI + LightGBM) ────────────────────────────────────────────────
   backend:
     build:
@@ -98,3 +117,5 @@ volumes:
 networks:
   dota_net:
     driver: bridge
+
+    

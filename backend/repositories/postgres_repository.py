@@ -19,6 +19,19 @@ class PostgresRepository:
 
         self._warm_cache()
 
+    def stats(self):
+
+     return {
+        "total_heroes":
+            len(self.hero_map_cache),
+
+        "total_matchup_pairs":
+            len(self.matchup_cache),
+
+        "total_synergy_pairs":
+            len(self.synergy_cache)
+    }
+
     def _warm_cache(self):
 
         print("Loading repository cache...")
