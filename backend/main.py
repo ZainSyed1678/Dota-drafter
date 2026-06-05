@@ -23,6 +23,15 @@ from services.metrics import (
 
 app = FastAPI()
 
+@app.on_event("startup")
+def startup():
+
+    print("=" * 60)
+    print("Dota Drafter API Started")
+    print(f"Heroes Loaded: {len(hero_map)}")
+    print("Version: 1.0.0")
+    print("=" * 60)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -50,7 +59,15 @@ class DraftRequest(BaseModel):
 class HeroSuggestion(BaseModel):
     id: int
     name: str
+
     score: float
+
+    matchup_score: float
+    synergy_score: float
+
+    role_bonus: float
+    draft_bonus: float
+
     reasons: list[str]
     roles: list[str]
 
@@ -66,9 +83,10 @@ class SuggestResponse(BaseModel):
 @app.get("/health")
 def health():
     return {
-        "status": "ok",
-        "heroes": len(hero_map)
-    }
+    "status": "ok",
+    "heroes": len(hero_map),
+    "version": "1.0.0"
+}
 
 
 @app.get("/debug")
@@ -96,6 +114,7 @@ def suggest(req: DraftRequest):
     start = perf_counter()
 
     cache_key = (
+        f"v1:"
         f"enemy:{','.join(sorted(req.enemy))}"
         f"|team:{','.join(sorted(req.team))}"
     )
@@ -163,3 +182,91 @@ def metrics():
         content=generate_latest(),
         media_type=CONTENT_TYPE_LATEST
     )
+
+@app.get("/debug/counters/{hero_name}")
+def debug_counters(hero_name: str):
+
+    return {
+        "hero": hero_name,
+        "top_counters":
+            hero_repository.get_top_counters(
+                hero_name
+            )
+    }
+
+@app.post("/debug/recommendation")
+def debug_recommendation(
+    req: DraftRequest
+):
+
+    return {
+        "enemy": req.enemy,
+        "team": req.team,
+        "candidates": engine.audit(
+            req.enemy,
+            req.team
+        )
+    }
+
+@app.post("/debug/missing-roles")
+def debug_missing_roles(
+    req: DraftRequest
+):
+
+    ally_ids = (
+        engine.resolve_names(
+            req.team
+        )
+    )
+
+    return {
+        "team": req.team,
+        "missing_roles":
+            engine.get_missing_roles(
+                ally_ids
+            )
+    }
+
+@app.get(
+    "/debug/matchup/{hero}/{enemy}"
+)
+def debug_matchup(
+    hero: str,
+    enemy: str
+):
+
+    result = (
+        hero_repository
+        .get_matchup_details(
+            hero,
+            enemy
+        )
+    )
+
+    if not result:
+
+        return {
+            "error":
+            "matchup not found"
+        }
+
+    return result
+
+@app.get("/debug/roles/{hero_name}")
+def debug_roles(
+    hero_name: str
+):
+
+    hero_id = (
+        engine.name_to_id.get(
+            hero_name.lower()
+        )
+    )
+
+    return {
+        "hero": hero_name,
+        "roles":
+            hero_repository.get_roles(
+                hero_id
+            )
+    }

@@ -100,7 +100,7 @@ services:
       dockerfile: Dockerfile
       args:
         # Injected at build time so the JS bundle knows the API URL
-        VITE_API_URL: http://192.168.1.11:8000
+        VITE_API_URL: http://localhost:8000
     container_name: dota_frontend
     restart: unless-stopped
     ports:
@@ -123,6 +123,7 @@ services:
 
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
 
     networks:
       - dota_net
@@ -133,25 +134,29 @@ services:
   
 
   grafana:
-    image: grafana/grafana
+   image: grafana/grafana
 
-    container_name: dota_grafana
+   container_name: dota_grafana
 
-    restart: unless-stopped
+   restart: unless-stopped
 
-    ports:
-      - "3001:3000"
+   ports:
+    - "3001:3000"
 
-    networks:
-      - dota_net
+   volumes:
+    - grafana_data:/var/lib/grafana
 
-    depends_on:
-      - prometheus
+   networks:
+    - dota_net
+
+   depends_on:
+    - prometheus
 
 
 volumes:
   postgres_data:
-
+  grafana_data:
+  prometheus_data:
 networks:
   dota_net:
     driver: bridge

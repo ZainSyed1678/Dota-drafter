@@ -21,16 +21,16 @@ class PostgresRepository:
 
     def stats(self):
 
-     return {
-        "total_heroes":
-            len(self.hero_map_cache),
+        return {
+            "total_heroes":
+                len(self.hero_map_cache),
 
-        "total_matchup_pairs":
-            len(self.matchup_cache),
+            "total_matchup_pairs":
+                len(self.matchup_cache),
 
-        "total_synergy_pairs":
-            len(self.synergy_cache)
-    }
+            "total_synergy_pairs":
+                len(self.synergy_cache)
+        }
 
     def _warm_cache(self):
 
@@ -223,6 +223,92 @@ class PostgresRepository:
                 ally_id
             )
         )
+
+    def get_top_counters(
+        self,
+        hero_name: str,
+        limit: int = 20
+    ):
+
+        query = text("""
+            SELECT
+                h.name,
+                m.matchup
+            FROM matchups m
+            JOIN heroes h
+                ON h.id = m.hero_id
+            WHERE m.enemy_id =
+            (
+                SELECT id
+                FROM heroes
+                WHERE name = :hero_name
+            )
+            ORDER BY m.matchup DESC
+            LIMIT :limit
+        """)
+
+        with self.engine.connect() as conn:
+
+            rows = conn.execute(
+                query,
+                {
+                    "hero_name": hero_name,
+                    "limit": limit
+                }
+            ).fetchall()
+
+        return [
+            {
+                "hero": row.name,
+                "matchup": float(
+                    row.matchup
+                )
+            }
+            for row in rows
+        ]
+
+    def get_matchup_details(
+        self,
+        hero_name: str,
+        enemy_name: str
+    ):
+
+        query = text("""
+            SELECT
+                h1.name AS hero,
+                h2.name AS enemy,
+                m.matchup
+            FROM matchups m
+            JOIN heroes h1
+                ON h1.id = m.hero_id
+            JOIN heroes h2
+                ON h2.id = m.enemy_id
+            WHERE
+                h1.name = :hero_name
+                AND
+                h2.name = :enemy_name
+        """)
+
+        with self.engine.connect() as conn:
+
+            row = conn.execute(
+                query,
+                {
+                    "hero_name": hero_name,
+                    "enemy_name": enemy_name
+                }
+            ).fetchone()
+
+        if not row:
+            return None
+
+        return {
+            "hero": row.hero,
+            "enemy": row.enemy,
+            "matchup": float(
+                row.matchup
+            )
+        }
 
 
 postgres_repository = PostgresRepository()
