@@ -1,0 +1,90 @@
+name: Auto-retrain Pipeline
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'  # Every 6 hours
+  workflow_dispatch:         # Manual trigger
+    inputs:
+      force_retrain:
+        description: 'Force retrain even without patch change'
+        required: false
+        default: 'false'
+        type: boolean
+      target_matches:
+        description: 'Target matches to collect'
+        required: false
+        default: '50000'
+        type: string
+
+jobs:
+  pipeline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install jupyter nbconvert
+
+      - name: Check for patch update
+        id: patch
+        run: |
+          cd fetch
+          python patch_detector.py
+          python -c "
+          from patch_detector import check_patch_changed
+          import json
+          result = check_patch_changed()
+          with open('$GITHUB_OUTPUT', 'a') as f:
+              f.write(f'changed={str(result[\"changed\"]).lower()}\n')
+              f.write(f'version={result[\"current\"][\"version\"] if result[\"current\"] else \"unknown\"}\n')
+          "
+
+      - name: Collect matches
+        run: |
+          cd fetch
+          python fetch.py --target ${{ github.event.inputs.target_matches || '50000' }} --output ../data/matches.csv
+
+      - name: Validate data
+        run: |
+          cd fetch
+          python validator.py ../data/matches.csv
+
+      - name: Retrain if needed
+        if: steps.patch.outputs.changed == 'true' || github.event.inputs.force_retrain == 'true'
+        run: |
+          cd fetch
+          python scheduler.py --retrain
+
+      - name: Save model version
+        if: steps.patch.outputs.changed == 'true' || github.event.inputs.force_retrain == 'true'
+        run: |
+          cd fetch
+          python -c "
+          from version_manager import save_version
+          save_version('${{ steps.patch.outputs.version }}', {'accuracy': None})
+          "
+
+      - name: Upload model artifacts
+        if: steps.patch.outputs.changed == 'true' || github.event.inputs.force_retrain == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: model-${{ steps.patch.outputs.version }}
+          path: model/*.pkl
+          retention-days: 90
+
+      - name: Commit updated data
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/ model/ fetch/patch_state.json
+          git diff --staged --quiet || git commit -m "chore: update match data [skip ci]"
+          git push

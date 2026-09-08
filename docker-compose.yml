@@ -4,8 +4,9 @@ version: "3.9"
 # Dota 2 Drafter — Multi-container setup
 #
 # Services:
-#   backend  — FastAPI (Python) serving the suggest API on port 8000
-#   frontend — Vite + React served via Nginx on port 3000
+#   backend   — FastAPI (Python) serving the suggest API on port 8000
+#   frontend  — Vite + React served via Nginx on port 3000
+#   scheduler — Automated data collection and model retraining (every 6 hours)
 #
 # Usage:
 #   docker compose up --build          # first time or after code changes
@@ -13,11 +14,15 @@ version: "3.9"
 #   docker compose down                # stop everything
 #   docker compose logs backend        # view API logs
 #   docker compose logs frontend       # view nginx logs
+#   docker compose logs scheduler      # view scheduler logs
 #
 # The pkl model files live in ./model/ on the HOST and are mounted
 # read-only into the backend container.  Retrain in the notebook,
 # then just restart the backend — no rebuild needed.
 #   docker compose restart backend
+#
+# The scheduler automatically checks for Dota 2 patches every 6 hours,
+# collects fresh match data, and retrains the model when a new patch is detected.
 # ─────────────────────────────────────────────────────────────────────────────
 
 services:
@@ -64,6 +69,51 @@ services:
     networks:
       - dota_net
 
+  # ── Prometheus ──────────────────────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: dota_prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - dota_net
+
+  # ── Grafana ─────────────────────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:latest
+    container_name: dota_grafana
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    networks:
+      - dota_net
+
+  # ── PostgreSQL Database ─────────────────────────────────────────────────────
+  postgres:
+    image: postgres:15-alpine
+    container_name: dota_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: dotauser
+      POSTGRES_PASSWORD: dotapassword
+      POSTGRES_DB: dotadb
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - dota_net
+
 networks:
   dota_net:
     driver: bridge
+
+volumes:
+  pgdata:
