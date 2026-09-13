@@ -8,6 +8,7 @@ import lifecycle_manager
 
 BATCH_SIZE = 100
 API_DELAY = 1.0
+MIN_MMR = 4500
 
 def init_tables(conn):
     with conn.cursor() as cur:
@@ -70,8 +71,77 @@ def main():
         """, (args.patch, "RUNNING"))
         run_id = cur.fetchone()[0]
     conn.commit()
-    print(f"Collection run {run_id} started for patch {args.patch}")
-    conn.close()
+
+    matches_collected = 0
+    total_fetched = 0
+    last_id = None
+
+    try:
+        while matches_collected < args.target:
+            batch = fetch_public_matches(last_match_id=last_id)
+            if not batch:
+                print("No matches returned, waiting...")
+                time.sleep(10)
+                continue
+
+            total_fetched += len(batch)
+            processed_batch = []
+
+            for match in batch:
+                if match.get('avg_mmr') and match['avg_mmr'] < MIN_MMR:
+                    continue
+
+                r_team = match['radiant_team']
+                d_team = match['dire_team']
+                
+                r_team_ids = [int(x) for x in r_team.split(',')] if isinstance(r_team, str) else r_team
+                d_team_ids = [int(x) for x in d_team.split(',')] if isinstance(d_team, str) else d_team
+                
+                if len(r_team_ids) != 5 or len(d_team_ids) != 5:
+                    continue
+
+                processed_batch.append((
+                    match['match_id'],
+                    bool(match['radiant_win']),
+                    ",".join(map(str, r_team_ids)),
+                    ",".join(map(str, d_team_ids)),
+                    args.patch
+                ))
+
+            if processed_batch:
+                with conn.cursor() as cur:
+                    execute_values(
+                        cur,
+                        "INSERT INTO matches (match_id, radiant_win, radiant_team, dire_team, patch_version) VALUES %s ON CONFLICT (match_id) DO NOTHING",
+                        processed_batch
+                    )
+                conn.commit()
+
+                added = len(processed_batch)
+                matches_collected += added
+                
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        UPDATE collection_runs 
+                        SET matches_fetched = %s, matches_inserted = %s 
+                        WHERE id = %s
+                    """, (total_fetched, matches_collected, run_id))
+                conn.commit()
+
+            last_id = batch[-1]['match_id']
+            print(f"Collected {matches_collected}/{args.target} matches | Last ID: {last_id}")
+            time.sleep(API_DELAY)
+
+        with conn.cursor() as cur:
+            cur.execute("UPDATE collection_runs SET status = 'SUCCESS', end_time = CURRENT_TIMESTAMP WHERE id = %s", (run_id,))
+        conn.commit()
+    except Exception as e:
+        print(f"CRITICAL ERROR: {e}")
+        with conn.cursor() as cur:
+            cur.execute("UPDATE collection_runs SET status = 'FAILED', end_time = CURRENT_TIMESTAMP WHERE id = %s", (run_id,))
+        conn.commit()
+    finally:
+        conn.close()
 
 if __name__ == "__main__":
     main()
