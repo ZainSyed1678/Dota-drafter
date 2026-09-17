@@ -33,7 +33,17 @@ def init_lifecycle_db():
                     dataset_version VARCHAR(50) NOT NULL,
                     match_count INT NOT NULL,
                     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                    is_ready BOOLEAN NOT NULL DEFAULT FALSE
+                    is_ready BOOLEAN NOT NULL DEFAULT FALSE,
+                    UNIQUE (patch_version, dataset_version)
+                )
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS feature_metadata (
+                    id SERIAL PRIMARY KEY,
+                    dataset_id INT REFERENCES dataset_metadata(id),
+                    feature_version VARCHAR(50) NOT NULL,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE (dataset_id, feature_version)
                 )
             """)
         conn.commit()
@@ -70,3 +80,23 @@ def register_dataset(version: str, dataset_version: str, match_count: int, is_re
                 VALUES (%s, %s, %s, %s)
             """, (version, dataset_version, match_count, is_ready))
         conn.commit()
+
+
+def register_feature(dataset_id: int, feature_version: str):
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("INSERT INTO feature_metadata (dataset_id, feature_version) VALUES (%s, %s) ON CONFLICT DO NOTHING", (dataset_id, feature_version))
+        conn.commit()
+
+def get_dataset_info(patch: str, version: str):
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=DictCursor) as cur:
+            cur.execute("SELECT * FROM dataset_metadata WHERE patch_version = %s AND dataset_version = %s", (patch, version))
+            return cur.fetchone()
+
+
+def get_patches_in_state(state: str):
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT patch_version FROM patch_lifecycle WHERE state = %s", (state,))
+            return [r[0] for r in cur.fetchall()]
