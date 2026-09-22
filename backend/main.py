@@ -17,8 +17,20 @@ app.add_middleware(
 
 @app.get("/health")
 def health():
-    ready = len(scoring.hero_map) > 0
-    return {"status": "ok" if ready else "model_not_loaded", "heroes": len(scoring.hero_map)}
+    ready = scoring.model_metadata["status"] == "ready"
+    return {"status": "ok" if ready else scoring.model_metadata["status"], "heroes": len(scoring.hero_map)}
+
+@app.get("/model/status")
+def model_status():
+    return scoring.model_metadata
+
+@app.post("/model/reload")
+def model_reload():
+    success = scoring.load_models()
+    if success:
+        return {"status": "success", "metadata": scoring.model_metadata}
+    else:
+        raise HTTPException(500, detail={"status": "error", "metadata": scoring.model_metadata})
 
 @app.get("/debug")
 def debug():
