@@ -18,6 +18,20 @@ def test_heroes():
     assert len(data) > 0
     assert "1" in data or 1 in data or "2" in data or 2 in data # Some hero exists
 
+def test_model_status():
+    response = client.get("/model/status")
+    assert response.status_code == 200
+    data = response.json()
+    assert "status" in data
+    assert "files" in data
+
+def test_model_reload():
+    response = client.post("/model/reload")
+    assert response.status_code in [200, 500]
+    data = response.json()
+    if response.status_code == 200:
+        assert data["status"] == "success"
+
 def test_suggest():
     payload = {
         "enemy": ["Axe", "Lion"],
