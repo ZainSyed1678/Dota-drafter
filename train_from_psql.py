@@ -68,23 +68,22 @@ def main():
     
     print(f"Grog save reproducible dataset to {versioned_csv} and symlinked to {active_csv}")
     
-    notebook_path = Path("notebooks") / "second.ipynb"
-    print("Grog run notebook to train model...")
+    # Call production pipeline script
+    print("Grog run production Python script to train model...")
     cmd = [
-        sys.executable, "-m", "jupyter", "nbconvert",
-        "--to", "script",
-        "--execute",
-        str(notebook_path),
+        sys.executable, "ml_pipeline/train.py",
+        "--input_csv", str(versioned_csv)
     ]
     
-    result = subprocess.run(cmd, capture_output=True, text=True)
+    result = subprocess.run(cmd, capture_output=True, text=True, cwd=".")
     
     if result.returncode != 0:
         print("Ugh! Train failed!")
         print(result.stderr)
     else:
         print(f"Train SUCCESS! Rock learned on {args.patch} {args.dataset}!")
-        print("\n".join(result.stdout.split("\n")[-20:]))
+        print("Model output:")
+        print("\n".join(result.stdout.split("\n")[-10:]))
         
 if __name__ == "__main__":
     main()
