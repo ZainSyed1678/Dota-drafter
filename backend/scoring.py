@@ -23,38 +23,74 @@ hero_winrate: Dict[int, float] = {}
 id_to_name: Dict[int, str] = {}
 name_to_id: Dict[str, int] = {}
 
+model_metadata: Dict[str, Any] = {
+    "loaded_at": None,
+    "status": "missing_core_files",
+    "files": {}
+}
+
 def load_models():
     global hero_map, matchup_matrix, synergy_matrix, hero_roles
     global hero_avg_matchup, hero_winrate, id_to_name, name_to_id
+    global model_metadata
     
+    import datetime
+    
+    temp_metadata = {"files": {}}
+    
+    def _safe_load(name: str, required: bool = True):
+        path = os.path.join(settings.MODEL_DIR, name)
+        if not os.path.exists(path):
+            if required:
+                raise RuntimeError(f"Required model file missing: {path}")
+            return None
+        
+        # Track file metadata
+        stat = os.stat(path)
+        temp_metadata["files"][name] = {
+            "size_bytes": stat.st_size,
+            "modified_at": datetime.datetime.fromtimestamp(stat.st_mtime).isoformat()
+        }
+        
+        with open(path, "rb") as f:
+            return pickle.load(f)
+
     try:
-        hero_map = _load("hero_map.pkl")
-        matchup_matrix = _load("matchup.pkl")
-        synergy_matrix = _load("synergy.pkl")
-        hero_roles = _load("roles.pkl")
+        new_hero_map = _safe_load("hero_map.pkl")
+        new_matchup = _safe_load("matchup.pkl")
+        new_synergy = _safe_load("synergy.pkl")
+        new_roles = _safe_load("roles.pkl")
+        new_ml_model = _safe_load("model.pkl", required=False)
         
         # Optional models
-        try:
-            hero_avg_matchup = _load("hero_avg_matchup.pkl")
-        except RuntimeError:
-            log.warning("hero_avg_matchup.pkl missing, using defaults.")
-            hero_avg_matchup = {}
+        new_avg = _safe_load("hero_avg_matchup.pkl", required=False) or {}
+        new_winrate = _safe_load("hero_winrate.pkl", required=False) or {}
             
-        try:
-            hero_winrate = _load("hero_winrate.pkl")
-        except RuntimeError:
-            log.warning("hero_winrate.pkl missing, using defaults.")
-            hero_winrate = {}
-            
-        log.info(f"Loaded models - {len(hero_map)} heroes, {len(matchup_matrix)} matchups")
+        log.info(f"Loaded models - {len(new_hero_map)} heroes, {len(new_matchup)} matchups")
+        
+        # Atomic swap
+        global ml_model
+        hero_map = new_hero_map
+        matchup_matrix = new_matchup
+        synergy_matrix = new_synergy
+        hero_roles = new_roles
+        ml_model = new_ml_model
+        hero_avg_matchup = new_avg
+        hero_winrate = new_winrate
         
         id_to_name = hero_map
         name_to_id = {v.lower(): k for k, v in hero_map.items()}
         
+        model_metadata["status"] = "ready"
+        model_metadata["loaded_at"] = datetime.datetime.now().isoformat()
+        model_metadata["files"] = temp_metadata["files"]
+        return True
+        
     except RuntimeError as e:
         log.error(str(e))
-        hero_map = matchup_matrix = synergy_matrix = {}
-        hero_roles = hero_avg_matchup = hero_winrate = {}
+        model_metadata["status"] = "missing_core_files"
+        model_metadata["error"] = str(e)
+        return False
 
 # Load once on import
 load_models()
@@ -88,7 +124,7 @@ def synergy_score(hero_id: int, ally_ids: List[int]) -> float:
     if not ally_ids: return 0.0
     total = 0.0
     for a in ally_ids:
-        v = synergy_matrix.get((hero_id, a)) or synergy_matrix.get((a, hero_id)) or 0.5
+        v = synergy_matrix.get((hero_id, a)) or synergy_matrix.get((aid, hero_id)) if False else (synergy_matrix.get((hero_id, a)) or synergy_matrix.get((a, hero_id)) or 0.5)
         total += v - 0.5
     return total / len(ally_ids)
 
