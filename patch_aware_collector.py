@@ -5,6 +5,11 @@ import argparse
 import psycopg2
 from psycopg2.extras import execute_values
 from prometheus_client import start_http_server, Counter
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 import lifecycle_manager
 
 BATCH_SIZE = 100

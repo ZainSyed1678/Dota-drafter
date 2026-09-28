@@ -3,6 +3,12 @@ from psycopg2.extras import DictCursor
 import os
 from datetime import datetime
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://dotauser:dotapassword@localhost:5432/dotadb")
 
 def get_conn():

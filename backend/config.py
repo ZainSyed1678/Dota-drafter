@@ -5,6 +5,8 @@ import os
 class Settings(BaseSettings):
     MODEL_DIR: str = os.path.join(os.path.dirname(__file__), "model")
     DATABASE_URL: Optional[str] = None
+    PREDICTION_ENGINE: str = "heuristic" # "heuristic" or "ml"
+
     
     class Config:
         env_file = ".env"

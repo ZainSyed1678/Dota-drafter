@@ -124,7 +124,7 @@ def synergy_score(hero_id: int, ally_ids: List[int]) -> float:
     if not ally_ids: return 0.0
     total = 0.0
     for a in ally_ids:
-        v = synergy_matrix.get((hero_id, a)) or synergy_matrix.get((aid, hero_id)) if False else (synergy_matrix.get((hero_id, a)) or synergy_matrix.get((a, hero_id)) or 0.5)
+        v = synergy_matrix.get((hero_id, a)) or synergy_matrix.get((a, hero_id)) or 0.5
         total += v - 0.5
     return total / len(ally_ids)
 
@@ -168,3 +168,49 @@ def build_reasons(hero_id: int, enemy_ids: List[int], enemy_names: List[str], al
         reasons.append(f"Meta strong ({wr:.1%} WR)")
 
     return reasons
+
+def predict(hero_id: int, enemy_ids: List[int], ally_ids: List[int], engine: str = 'heuristic') -> float:
+    if engine == 'ml' and ml_model is not None:
+        import numpy as np
+        NUM_HEROES = len(hero_map)
+        heroes_list = sorted(list(hero_map.keys()))
+        hero_to_idx = {h: i for i, h in enumerate(heroes_list)}
+        vec = []
+        hero_vec = np.zeros(NUM_HEROES)
+        team = ally_ids + [hero_id]
+        for h in team:
+            if h in hero_to_idx: hero_vec[hero_to_idx[h]] = 1
+        for h in enemy_ids:
+            if h in hero_to_idx: hero_vec[hero_to_idx[h]] = -1
+        vec.extend(hero_vec)
+        radiant_wr = np.mean([hero_winrate.get(h, 0.5) for h in team])
+        dire_wr = np.mean([hero_winrate.get(h, 0.5) for h in enemy_ids])
+        vec.append(2 * radiant_wr)
+        vec.append(2 * dire_wr)
+        vec.append(3 * (radiant_wr - dire_wr))
+        matchup_score = 0
+        for r in team:
+            for d in enemy_ids:
+                matchup_score += matchup_matrix.get((r, d), 0.5) - 0.5
+        vec.append(4 * matchup_score)
+        syn_score = 0
+        for i in range(len(team)):
+            for j in range(i+1, len(team)):
+                pair = (team[i], team[j])
+                rev_pair = (team[j], team[i])
+                syn_score += synergy_matrix.get(pair, synergy_matrix.get(rev_pair, 0.5)) - 0.5
+        vec.append(2 * syn_score)
+        try:
+            if hasattr(ml_model, 'predict_proba'):
+                return float(ml_model.predict_proba([vec])[0][1])
+            return 0.5
+        except:
+            return 0.5
+    else:
+        m = norm_matchup(hero_id, enemy_ids)
+        s = synergy_score(hero_id, ally_ids)
+        wr = hero_winrate.get(hero_id, 0.5)
+        score = 1.50 * m + 0.35 * s + 0.06 * (wr - 0.5)
+        if abs(m) < 0.005:
+            score -= 0.02
+        return score

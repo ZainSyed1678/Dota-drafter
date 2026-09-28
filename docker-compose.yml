@@ -1,33 +1,7 @@
 version: "3.9"
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Dota 2 Drafter — Multi-container setup
-#
-# Services:
-#   backend   — FastAPI (Python) serving the suggest API on port 8000
-#   frontend  — Vite + React served via Nginx on port 3000
-#   scheduler — Automated data collection and model retraining (every 6 hours)
-#
-# Usage:
-#   docker compose up --build          # first time or after code changes
-#   docker compose up                  # subsequent starts (< 5 seconds)
-#   docker compose down                # stop everything
-#   docker compose logs backend        # view API logs
-#   docker compose logs frontend       # view nginx logs
-#   docker compose logs scheduler      # view scheduler logs
-#
-# The pkl model files live in ./model/ on the HOST and are mounted
-# read-only into the backend container.  Retrain in the notebook,
-# then just restart the backend — no rebuild needed.
-#   docker compose restart backend
-#
-# The scheduler automatically checks for Dota 2 patches every 6 hours,
-# collects fresh match data, and retrains the model when a new patch is detected.
-# ─────────────────────────────────────────────────────────────────────────────
-
 services:
 
-  # ── API (FastAPI + LightGBM) ────────────────────────────────────────────────
   backend:
     build:
       context: ./backend
@@ -37,7 +11,6 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      # Mount the model directory so you can retrain without rebuilding
       - ./model:/app/model:ro
     environment:
       - PYTHONUNBUFFERED=1
@@ -51,13 +24,11 @@ services:
     networks:
       - dota_net
 
-  # ── Frontend (React/Vite built → Nginx) ─────────────────────────────────────
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        # Injected at build time so the JS bundle knows the API URL
         VITE_API_URL: http://localhost:8000
     container_name: dota_frontend
     restart: unless-stopped
@@ -69,7 +40,6 @@ services:
     networks:
       - dota_net
 
-  # ── Prometheus ──────────────────────────────────────────────────────────────
   prometheus:
     image: prom/prometheus:latest
     container_name: dota_prometheus
@@ -83,7 +53,6 @@ services:
     networks:
       - dota_net
 
-  # ── Grafana ─────────────────────────────────────────────────────────────────
   grafana:
     image: grafana/grafana:latest
     container_name: dota_grafana
@@ -92,10 +61,11 @@ services:
       - "3001:3000"
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
     networks:
       - dota_net
 
-  # ── PostgreSQL Database ─────────────────────────────────────────────────────
   postgres:
     image: postgres:15-alpine
     container_name: dota_postgres
@@ -111,9 +81,35 @@ services:
     networks:
       - dota_net
 
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: dota_qdrant
+    restart: unless-stopped
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    networks:
+      - dota_net
+
+  supervisor_bot:
+    build:
+      context: ./bot
+      dockerfile: Dockerfile
+    container_name: dota_supervisor_bot
+    restart: unless-stopped
+    environment:
+      - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
+      - BACKEND_URL=http://backend:8000
+      - PROMETHEUS_URL=http://prometheus:9090
+      - QDRANT_URL=http://qdrant:6333
+    networks:
+      - dota_net
+
 networks:
   dota_net:
     driver: bridge
 
 volumes:
   pgdata:
+  qdrant_data:
