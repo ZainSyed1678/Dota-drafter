@@ -13,3 +13,5 @@ xgboost==2.0.3
 prometheus-client==0.20.0
 slowapi==0.1.9
 python-dotenv==1.0.1
+pyTelegramBotAPI==4.18.0
+psycopg2-binary==2.9.9

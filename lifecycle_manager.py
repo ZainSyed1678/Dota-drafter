@@ -12,7 +12,7 @@ except ImportError:
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://dotauser:dotapassword@localhost:5432/dotadb")
 
 def get_conn():
-    return psycopg2.connect(DATABASE_URL)
+    return psycopg2.connect(DATABASE_URL, connect_timeout=15)
 
 def init_lifecycle_db():
     with get_conn() as conn:
@@ -84,6 +84,8 @@ def register_dataset(version: str, dataset_version: str, match_count: int, is_re
             cur.execute("""
                 INSERT INTO dataset_metadata (patch_version, dataset_version, match_count, is_ready)
                 VALUES (%s, %s, %s, %s)
+                ON CONFLICT (patch_version, dataset_version)
+                DO UPDATE SET match_count = EXCLUDED.match_count, is_ready = EXCLUDED.is_ready
             """, (version, dataset_version, match_count, is_ready))
         conn.commit()
 

@@ -2,11 +2,17 @@ import os
 import telebot
 import requests
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "")
-BACKEND_URL = os.environ.get("BACKEND_URL", "http://backend:8000")
+BACKEND_URL = os.environ.get("BACKEND_URL", "https://dota-drafter-api.onrender.com")
 PROMETHEUS_URL = os.environ.get("PROMETHEUS_URL", "http://prometheus:9090")
 QDRANT_URL = os.environ.get("QDRANT_URL", "http://qdrant:6333")
-POSTGRES_URL = os.environ.get("POSTGRES_URL", "http://postgres:5432")
+POSTGRES_URL = os.environ.get("DATABASE_URL", os.environ.get("POSTGRES_URL", "http://postgres:5432"))
 GRAFANA_URL = os.environ.get("GRAFANA_URL", "http://grafana:3000")
 
 if not TELEGRAM_TOKEN:
@@ -302,5 +308,6 @@ def check_hero(message):
     except Exception as e:
         bot.reply_to(message, f"Grog's brain hurts: {e}")
 
-print("Grog Bot waking up...")
-bot.infinity_polling()
+if __name__ == "__main__":
+    print("Grog Bot waking up...")
+    bot.infinity_polling()

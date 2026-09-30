@@ -13,7 +13,7 @@ except ImportError:
 import lifecycle_manager
 
 BATCH_SIZE = 100
-API_DELAY = 1.0
+API_DELAY = 1.2  # 1.2s delay ensures ~50 req/min, safely below OpenDota 60 req/min limit
 MIN_MMR = 4500
 
 # Prometheus Metrics
@@ -67,11 +67,12 @@ def fetch_public_matches(last_match_id=None):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--patch", type=str, required=True, help="Current Dota 2 Patch (e.g., 7.35d)")
-    parser.add_argument("--target", type=int, default=100, help="Number of valid matches to collect")
+    parser.add_argument("--target", type=int, default=1000, help="Number of valid matches to collect")
+    parser.add_argument("--max-calls", type=int, default=100, help="Maximum API calls per collection run")
     parser.add_argument("--metrics-port", type=int, default=8002)
     args = parser.parse_args()
 
-    print(f"Grog start smarter collector for patch {args.patch}...")
+    print(f"Grog start smarter collector for patch {args.patch} (target={args.target}, max_calls={args.max_calls})...")
     try:
         start_http_server(args.metrics_port)
     except Exception as e:
@@ -81,7 +82,7 @@ def main():
     lifecycle_manager.init_lifecycle_db()
     
     db_url = os.environ.get("DATABASE_URL", "postgresql://dotauser:dotapassword@localhost:5432/dotadb")
-    conn = psycopg2.connect(db_url)
+    conn = psycopg2.connect(db_url, connect_timeout=15)
     init_tables(conn)
 
     # 1. Patch Association & Lifecycle Update
@@ -100,10 +101,12 @@ def main():
 
     matches_collected = 0
     total_fetched = 0
+    calls_made = 0
     last_id = None
 
     try:
-        while matches_collected < args.target:
+        while matches_collected < args.target and calls_made < args.max_calls:
+            calls_made += 1
             batch = fetch_public_matches(last_match_id=last_id)
             if not batch:
                 print("No matches returned, waiting...")
@@ -160,7 +163,7 @@ def main():
                 conn.commit()
 
             last_id = batch[-1]['match_id']
-            print(f"Grog save {matches_collected}/{args.target} for patch {args.patch} | Last ID: {last_id}")
+            print(f"Grog call {calls_made}/{args.max_calls} | Saved {matches_collected}/{args.target} for patch {args.patch} | Last ID: {last_id}")
             time.sleep(API_DELAY)
 
         # Success!
@@ -168,17 +171,21 @@ def main():
             cur.execute("UPDATE collection_runs SET status = 'SUCCESS', end_time = CURRENT_TIMESTAMP WHERE id = %s", (run_id,))
         conn.commit()
 
+        print(f"Run complete! Fetched {total_fetched} raw matches across {calls_made} API calls. Saved {matches_collected} valid matches.")
+
         # 4. Readiness Metrics & State Transition
-        print(f"Target reached for {args.patch}! Transitioning to DATA_READINESS_CHECK.")
-        lifecycle_manager.transition_state(args.patch, "DATA_READINESS_CHECK")
-        
-        # Check total matches for this patch
         with conn.cursor() as cur:
             cur.execute("SELECT COUNT(*) FROM matches WHERE patch_version = %s", (args.patch,))
             total_patch_matches = cur.fetchone()[0]
-        
+
         is_ready = total_patch_matches >= args.target
         lifecycle_manager.register_dataset(args.patch, "v1", total_patch_matches, is_ready=is_ready)
+
+        if is_ready:
+            print(f"Target reached for {args.patch}! (Total matches: {total_patch_matches}). Transitioning to DATA_READINESS_CHECK.")
+            lifecycle_manager.transition_state(args.patch, "DATA_READINESS_CHECK")
+        else:
+            print(f"Current patch matches: {total_patch_matches}/{args.target}. Remaining active in COLLECTION_ACTIVE.")
         
     except Exception as e:
         # 5. Failure Tracking

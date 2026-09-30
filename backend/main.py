@@ -130,6 +130,28 @@ def metrics():
             pass
     return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
+@app.on_event("startup")
+def startup_event():
+    import os
+    token = os.environ.get("TELEGRAM_TOKEN")
+    if token:
+        try:
+            from bot_service import start_bot_thread
+            start_bot_thread(token)
+            log.info("Telegram supervisor bot started in background!")
+        except Exception as e:
+            log.warning(f"Could not start Telegram bot: {e}")
+
+@app.get("/")
+def root():
+    return {
+        "status": "ok",
+        "service": "Dota 2 Drafter API",
+        "version": "2.0",
+        "docs": "/docs",
+        "health": "/health"
+    }
+
 @app.get("/health")
 def health():
     ready = scoring.model_metadata["status"] == "ready"

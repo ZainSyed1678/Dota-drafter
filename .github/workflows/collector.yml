@@ -1,13 +1,13 @@
-name: Dota Match Collector Cron
+name: Dota Match Collector & Auto-Retrain Cron
 
 on:
   schedule:
-    # Run every 6 hours (00:00, 06:00, 12:00, 18:00 UTC)
-    - cron: '0 */6 * * *'
+    # Run every 3 hours (00:00, 03:00, 06:00, 09:00, 12:00, 15:00, 18:00, 21:00 UTC)
+    - cron: '0 */3 * * *'
   workflow_dispatch: # Allows manual trigger from GitHub UI anytime
 
 jobs:
-  collect:
+  collect-and-train:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -22,10 +22,17 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install requests psycopg2-binary prometheus-client python-dotenv
+          pip install requests psycopg2-binary prometheus-client python-dotenv pandas numpy scikit-learn xgboost lightgbm
 
-      - name: Run Match Collector
+      - name: Run Match Collector (100 calls per run)
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
-          python patch_aware_collector.py --patch 7.35d --target 100
+          python patch_aware_collector.py --patch 7.35d --max-calls 100 --target 5000
+
+      - name: Run Pipeline Orchestrator (Auto-retrain if ready)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          BACKEND_URL: https://dota-drafter-api.onrender.com
+        run: |
+          python orchestrator.py
