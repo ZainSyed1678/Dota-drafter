@@ -183,14 +183,42 @@ def create_bot(token: str):
 
     return bot
 
+_lock_socket = None
+
+def acquire_bot_lock() -> bool:
+    global _lock_socket
+    import socket
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.bind(("127.0.0.1", 9999))
+        _lock_socket = s
+        return True
+    except OSError:
+        return False
+
 def start_bot_thread(token: str):
+    if not acquire_bot_lock():
+        print("Another worker process already holds the Telegram bot lock. Skipping duplicate bot.")
+        return None
+
+    import time
     bot = create_bot(token)
+
     def _runner():
-        print("Telegram Supervisor Bot starting infinity polling...")
+        print("Telegram Supervisor Bot starting resilient polling...")
         try:
-            bot.infinity_polling(skip_pending=True)
-        except Exception as e:
-            print(f"Telegram Bot polling error: {e}")
+            bot.remove_webhook()
+        except Exception:
+            pass
+
+        while True:
+            try:
+                bot.infinity_polling(skip_pending=True, timeout=20, long_polling_timeout=20)
+            except Exception as e:
+                print(f"Telegram Bot polling error (will retry in 5s): {e}")
+                time.sleep(5)
+
     t = threading.Thread(target=_runner, daemon=True)
     t.start()
     return t
+
