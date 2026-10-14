@@ -90,10 +90,20 @@ def register_dataset(version: str, dataset_version: str, match_count: int, is_re
         conn.commit()
 
 
-def register_feature(dataset_id: int, feature_version: str):
+def register_feature(patch_or_id, feature_version: str, num_features: int = 124, feature_names: list = None):
+    import json
+    if feature_names is None:
+        feature_names = ["radiant_heroes", "dire_heroes", "radiant_wr", "dire_wr", "wr_diff", "matchup_score", "synergy_score"]
+    patch_str = str(patch_or_id)
+    if patch_str.isdigit():
+        patch_str = "7.35d"
     with get_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute("INSERT INTO feature_metadata (dataset_id, feature_version) VALUES (%s, %s) ON CONFLICT DO NOTHING", (dataset_id, feature_version))
+            cur.execute("""
+                INSERT INTO feature_metadata (patch_version, feature_version, num_features, feature_names) 
+                VALUES (%s, %s, %s, %s) 
+                ON CONFLICT (patch_version, feature_version) DO NOTHING
+            """, (patch_str, feature_version, num_features, json.dumps(feature_names)))
         conn.commit()
 
 def get_dataset_info(patch: str, version: str):

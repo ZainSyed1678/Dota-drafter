@@ -5,7 +5,13 @@ import requests
 import sys
 import lifecycle_manager
 
-BACKEND_URL = os.environ.get("BACKEND_URL", "http://localhost:8000")
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
+BACKEND_URL = os.environ.get("BACKEND_URL", "https://dota-drafter-api.onrender.com")
 
 def run_training(patch: str, dataset_version: str = "v1") -> bool:
     print(f"Orchestrator telling Grog to train for Patch {patch}, Dataset {dataset_version}...")

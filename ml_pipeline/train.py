@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import requests
 import ast
+import os
 import argparse
 import pickle
 import sys
@@ -29,7 +30,8 @@ def clean_team(x):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--input_csv", type=str, required=True, help="Path to the versioned matches CSV")
-    parser.add_argument("--output_dir", type=str, default="../backend/model", help="Directory to save the trained pkl files")
+    default_out = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "backend", "model")
+    parser.add_argument("--output_dir", type=str, default=default_out, help="Directory to save the trained pkl files")
     args = parser.parse_args()
 
     input_path = Path(args.input_csv)
@@ -212,9 +214,9 @@ def main():
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
     model = XGBClassifier(
-        n_estimators=800, max_depth=7, learning_rate=0.025,
-        subsample=0.9, colsample_bytree=0.9, reg_lambda=2,
-        reg_alpha=0.5, eval_metric='logloss'
+        n_estimators=300, max_depth=6, learning_rate=0.03,
+        subsample=0.85, colsample_bytree=0.85, reg_lambda=2,
+        reg_alpha=0.5, eval_metric='logloss', n_jobs=-1, random_state=42
     )
     
     print("Training XGBoost...")

@@ -5,6 +5,11 @@ import subprocess
 import sys
 import argparse
 from pathlib import Path
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 import lifecycle_manager
 
 def main():
@@ -12,6 +17,7 @@ def main():
     parser.add_argument("--patch", type=str, required=True, help="Patch version (e.g. 7.35d)")
     parser.add_argument("--dataset", type=str, required=True, help="Dataset version (e.g. v1)")
     parser.add_argument("--feature", type=str, default="v1", help="Feature version (e.g. v1)")
+    parser.add_argument("--max-samples", type=int, default=50000, help="Max matches to use for training")
     args = parser.parse_args()
 
     print(f"Grog start train process for Patch {args.patch}, Dataset {args.dataset}, Feature {args.feature}!")
@@ -31,14 +37,15 @@ def main():
         print(f"Ugh! Dataset {args.dataset} is NOT ready!")
         return
 
-    limit = ds_info['match_count']
+    total_available = ds_info['match_count']
+    limit = min(total_available, args.max_samples)
     ds_id = ds_info['id']
 
     # Register feature version
-    lifecycle_manager.register_feature(ds_id, args.feature)
+    lifecycle_manager.register_feature(args.patch, args.feature)
         
-    print(f"Grog downloading exactly {limit} matches from PSQL for boundary...")
-    conn = psycopg2.connect(db_url)
+    print(f"Grog downloading {limit} matches (out of {total_available} total in Neon) for training...")
+    conn = psycopg2.connect(db_url, connect_timeout=15)
     
     # Reproducible query!
     query = f"""
