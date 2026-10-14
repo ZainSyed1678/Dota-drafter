@@ -434,6 +434,246 @@ body{background:var(--bg);color:var(--text);overflow-x:hidden}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
 ::-webkit-scrollbar-thumb:hover{background:var(--gold-dim)}
+
+/* ── RESPONSIVE MOBILE STYLES ── */
+.mobile-bar { display: none; }
+.slots-list { display: flex; flex-direction: column; gap: 5px; }
+.psec-hdr { margin-bottom: 4px; }
+
+@media (max-width: 900px) {
+  .app {
+    min-height: 100dvh;
+    grid-template-rows: auto auto 1fr auto;
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "hdr"
+      "panel"
+      "grid"
+      "results";
+  }
+
+  .hdr {
+    padding: 8px 12px;
+    flex-wrap: wrap;
+    gap: 8px;
+    height: auto;
+    min-height: 50px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .logo {
+    font-size: 15px;
+    letter-spacing: 2px;
+  }
+
+  .search-wrap {
+    order: 3;
+    max-width: 100%;
+    width: 100%;
+    flex: 1 1 100%;
+    margin-top: 2px;
+  }
+
+  .hdr-btns {
+    margin-left: auto;
+    gap: 4px;
+    order: 2;
+  }
+
+  .btn {
+    padding: 6px 9px;
+    font-size: 10px;
+    letter-spacing: 1px;
+  }
+
+  .hdr .btn-suggest {
+    display: none;
+  }
+
+  .panel {
+    border-left: none;
+    border-bottom: 1px solid var(--border);
+    padding: 8px 10px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    background: rgba(11,15,22,.98);
+  }
+
+  .divider {
+    display: none;
+  }
+
+  .psec {
+    margin-bottom: 0;
+  }
+
+  .psec-hdr {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+  }
+
+  .ptitle {
+    margin-bottom: 0;
+    padding-bottom: 0;
+    border-bottom: none;
+    font-size: 8.5px;
+  }
+
+  .pcount {
+    margin-bottom: 0;
+    font-size: 8px;
+  }
+
+  .slots-list {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 4px;
+  }
+
+  .slot {
+    flex-direction: column;
+    padding: 2px;
+    min-height: 44px;
+    justify-content: center;
+    text-align: center;
+    gap: 2px;
+    border-radius: 4px;
+    position: relative;
+  }
+
+  .slot img {
+    width: 100%;
+    height: 22px;
+    border-radius: 2px;
+  }
+
+  .slot-info {
+    display: none;
+  }
+
+  .slot-empty {
+    font-size: 11px;
+    color: var(--dim);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-style: normal;
+  }
+
+  .slot-rm {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    width: 16px;
+    height: 16px;
+    font-size: 8px;
+    border-radius: 50%;
+    background: rgba(200,75,75,.95);
+    color: #fff;
+    border: 1px solid rgba(255,255,255,.4);
+    box-shadow: 0 1px 4px rgba(0,0,0,.6);
+  }
+
+  .grid-area {
+    padding: 10px 10px 75px;
+  }
+
+  .hero-grid {
+    grid-template-columns: repeat(auto-fill, minmax(56px, 1fr));
+    gap: 5px;
+  }
+
+  .hcard {
+    border-radius: 4px;
+  }
+
+  .hcard:active {
+    transform: scale(0.93);
+  }
+
+  .hname {
+    font-size: 7.5px;
+    letter-spacing: 0;
+    padding: 4px 1px 1px;
+  }
+
+  .picks-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .results {
+    padding: 16px 12px 80px;
+  }
+
+  .pick-card {
+    border-radius: 6px;
+  }
+
+  .pick-img-wrap {
+    aspect-ratio: 16/6;
+  }
+
+  .pick-name {
+    font-size: 15px;
+  }
+
+  .preason {
+    font-size: 11px;
+    line-height: 1.4;
+  }
+
+  .mobile-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px));
+    background: rgba(6,8,13,.95);
+    backdrop-filter: blur(12px);
+    border-top: 1px solid var(--border);
+    z-index: 1000;
+    box-shadow: 0 -4px 20px rgba(0,0,0,.6);
+  }
+
+  .mobile-modes {
+    display: flex;
+    gap: 4px;
+  }
+
+  .mobile-bar .btn {
+    padding: 8px 12px;
+    font-size: 11px;
+    border-radius: 4px;
+  }
+
+  .mobile-bar .btn-suggest {
+    flex: 1;
+    display: block;
+    text-align: center;
+    font-size: 12px;
+    padding: 9px 14px;
+  }
+}
+
+@media (max-width: 480px) {
+  .hero-grid {
+    grid-template-columns: repeat(5, 1fr);
+    gap: 4px;
+  }
+  .hname {
+    font-size: 7px;
+  }
+}
 `;
 
 export default function Dota2Drafter() {
@@ -508,8 +748,12 @@ export default function Dota2Drafter() {
       if (!res.ok) throw new Error(`${res.status}`);
       const data = await res.json();
       setPicks(data.picks || []);
+      setTimeout(() => {
+        const el = document.getElementById("results-section");
+        if (el) el.scrollIntoView({ behavior: "smooth" });
+      }, 120);
     } catch(e) {
-      setApiErr(`Backend error: ${e.message}. Is uvicorn running on port 8000?`);
+      setApiErr(`Backend error: ${e.message}. Is backend running?`);
     } finally {
       setLoading(false);
     }
@@ -607,75 +851,82 @@ export default function Dota2Drafter() {
         })}
       </main>
 
-      {/* SIDE PANEL */}
+      {/* SIDE PANEL / MOBILE TOP DRAFT DOCK */}
       <aside className="panel">
         {/* Enemy */}
         <div className="psec">
-          <div className="ptitle e">✕ ENEMY TEAM</div>
-          <div className="pcount">{enemyHeroes.length} / {MAX_PICKS} selected</div>
-          {Array.from({length: MAX_PICKS}).map((_, i) => {
-            const h = enemyHeroes[i];
-            return h ? (
-              <div key={h.id} className="slot fe">
-                <img src={IMG(h.img)} alt={h.name}
-                     onError={e => e.target.style.display="none"} />
-                <div className="slot-info">
-                  <div className="slot-name">{h.name}</div>
-                  <div className="slot-attr" style={{color:ATTR_META[h.attr]?.color}}>
-                    {h.attr}
+          <div className="psec-hdr">
+            <div className="ptitle e">✕ ENEMY TEAM</div>
+            <div className="pcount">{enemyHeroes.length} / {MAX_PICKS} selected</div>
+          </div>
+          <div className="slots-list">
+            {Array.from({length: MAX_PICKS}).map((_, i) => {
+              const h = enemyHeroes[i];
+              return h ? (
+                <div key={h.id} className="slot fe">
+                  <img src={IMG(h.img)} alt={h.name}
+                       onError={e => e.target.style.display="none"} />
+                  <div className="slot-info">
+                    <div className="slot-name">{h.name}</div>
+                    <div className="slot-attr" style={{color:ATTR_META[h.attr]?.color}}>
+                      {h.attr}
+                    </div>
                   </div>
+                  <div
+                    className="slot-rm"
+                    onClick={(e) => { e.stopPropagation(); rmEnemy(h.id); }}
+                    title="Remove"
+                  >✕</div>
                 </div>
-                {/* FIX: onClick uses arrow function capturing h.id to prevent stale closure */}
-                <div
-                  className="slot-rm"
-                  onClick={(e) => { e.stopPropagation(); rmEnemy(h.id); }}
-                  title="Remove"
-                >✕</div>
-              </div>
-            ) : (
-              <div key={i} className="slot">
-                <span className="slot-empty">— Empty slot —</span>
-              </div>
-            );
-          })}
+              ) : (
+                <div key={i} className="slot">
+                  <span className="slot-empty">—</span>
+                </div>
+              );
+            })}
+          </div>
         </div>
 
         <div className="divider"/>
 
         {/* Ally */}
         <div className="psec">
-          <div className="ptitle a">✓ YOUR TEAM</div>
-          <div className="pcount">{teamHeroes.length} / {MAX_PICKS} selected</div>
-          {Array.from({length: MAX_PICKS}).map((_, i) => {
-            const h = teamHeroes[i];
-            return h ? (
-              <div key={h.id} className="slot fa">
-                <img src={IMG(h.img)} alt={h.name}
-                     onError={e => e.target.style.display="none"} />
-                <div className="slot-info">
-                  <div className="slot-name">{h.name}</div>
-                  <div className="slot-attr" style={{color:ATTR_META[h.attr]?.color}}>
-                    {h.attr}
+          <div className="psec-hdr">
+            <div className="ptitle a">✓ YOUR TEAM</div>
+            <div className="pcount">{teamHeroes.length} / {MAX_PICKS} selected</div>
+          </div>
+          <div className="slots-list">
+            {Array.from({length: MAX_PICKS}).map((_, i) => {
+              const h = teamHeroes[i];
+              return h ? (
+                <div key={h.id} className="slot fa">
+                  <img src={IMG(h.img)} alt={h.name}
+                       onError={e => e.target.style.display="none"} />
+                  <div className="slot-info">
+                    <div className="slot-name">{h.name}</div>
+                    <div className="slot-attr" style={{color:ATTR_META[h.attr]?.color}}>
+                      {h.attr}
+                    </div>
                   </div>
+                  <div
+                    className="slot-rm"
+                    onClick={(e) => { e.stopPropagation(); rmTeam(h.id); }}
+                    title="Remove"
+                  >✕</div>
                 </div>
-                <div
-                  className="slot-rm"
-                  onClick={(e) => { e.stopPropagation(); rmTeam(h.id); }}
-                  title="Remove"
-                >✕</div>
-              </div>
-            ) : (
-              <div key={i} className="slot">
-                <span className="slot-empty">— Empty slot —</span>
-              </div>
-            );
-          })}
+              ) : (
+                <div key={i} className="slot">
+                  <span className="slot-empty">—</span>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </aside>
 
-      {/* RESULTS — flat 3×3 grid */}
+      {/* RESULTS — flat grid */}
       {(picks !== null || apiErr) && (
-        <section className="results">
+        <section className="results" id="results-section">
           <div className="res-title">🎯 RECOMMENDED PICKS</div>
           {apiErr && <div className="err-msg">⚠ {apiErr}</div>}
           {picks && picks.length === 0 && (
@@ -727,6 +978,25 @@ export default function Dota2Drafter() {
           )}
         </section>
       )}
+
+      {/* MOBILE FLOATING ACTION BAR */}
+      <div className="mobile-bar">
+        <div className="mobile-modes">
+          <button
+            className={`btn btn-enemy${mode==="enemy" ? " on" : ""}`}
+            onClick={() => setMode("enemy")}
+          >✕ Enemy</button>
+          <button
+            className={`btn btn-ally${mode==="team" ? " on" : ""}`}
+            onClick={() => setMode("team")}
+          >✓ Ally</button>
+        </div>
+        <button
+          className={`btn btn-suggest${loading ? " spinning" : ""}`}
+          onClick={handleSuggest}
+          disabled={!canSuggest || loading}
+        >{loading ? "⟳ Analyzing…" : `🔥 Suggest Picks (${enemy.length + team.length})`}</button>
+      </div>
     </div>
   );
 }
