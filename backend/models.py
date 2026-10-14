@@ -36,12 +36,23 @@ class DraftRequest(BaseModel):
             raise ValueError(f"A hero cannot be picked on both teams simultaneously: {', '.join(overlap)}")
         return self
 
+class ReasonDetail(BaseModel):
+    summary: str
+    target_hero: str = ""
+    reason_type: str = "counter"  # counter | synergy | meta
+    how_and_why: str = ""
+    key_abilities: list[str] = []
+    beginner_tip: str = ""
+
 class HeroSuggestion(BaseModel):
-    id:      int
-    name:    str
-    score:   float
-    reasons: list[str]
-    roles:   list[str]
+    id:             int
+    name:           str
+    score:          float
+    reasons:        list[str] = []
+    reason_details: list[ReasonDetail] = []
+    roles:          list[str] = []
+    difficulty:     str = "Easy"
+    overview:       str = ""
 
 class SuggestResponse(BaseModel):
     picks: list[HeroSuggestion]

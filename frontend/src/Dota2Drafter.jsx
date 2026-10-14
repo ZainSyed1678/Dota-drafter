@@ -221,6 +221,8 @@ body{background:var(--bg);color:var(--text);overflow-x:hidden}
 .btn-enemy.on{background:rgba(200,75,75,.18);box-shadow:0 0 12px rgba(200,75,75,.35)}
 .btn-ally{color:var(--green);border-color:var(--green)}
 .btn-ally.on{background:rgba(75,200,122,.14);box-shadow:0 0 12px rgba(75,200,122,.28)}
+.btn-beginner{color:#4bc87a;border-color:rgba(75,200,122,.5)}
+.btn-beginner.on{background:rgba(75,200,122,.2);border-color:#4bc87a;box-shadow:0 0 12px rgba(75,200,122,.35)}
 .btn-suggest{
   color:#fff;border-color:var(--gold);
   background:linear-gradient(135deg,rgba(200,168,75,.22),rgba(200,168,75,.06));
@@ -331,20 +333,61 @@ body{background:var(--bg);color:var(--text);overflow-x:hidden}
   padding:20px 22px 28px;
   background:rgba(6,8,13,.98);
 }
+.res-hdr{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:10px;
+  margin-bottom:16px;
+}
 .res-title{
   font-family:'Cinzel',serif;font-size:12px;letter-spacing:4px;font-weight:700;
   color:var(--gold);text-shadow:0 0 14px rgba(200,168,75,.35);
-  margin-bottom:16px;display:flex;align-items:center;gap:10px;
+  margin-bottom:0;display:flex;align-items:center;gap:10px;width:100%;
 }
 .res-title::before,.res-title::after{content:'';flex:1;height:1px}
 .res-title::before{background:linear-gradient(90deg,transparent,rgba(200,168,75,.3))}
 .res-title::after{background:linear-gradient(270deg,transparent,rgba(200,168,75,.3))}
+
+.res-controls{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  flex-wrap:wrap;
+}
+.btn-filter-pill{
+  font-family:'Rajdhani',sans-serif;
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:1px;
+  padding:5px 14px;
+  border-radius:20px;
+  background:rgba(255,255,255,.05);
+  border:1px solid var(--border);
+  color:var(--text);
+  cursor:pointer;
+  transition:all .18s;
+  display:flex;
+  align-items:center;
+  gap:6px;
+}
+.btn-filter-pill:hover{
+  border-color:var(--gold-dim);
+}
+.btn-filter-pill.active{
+  background:rgba(75,200,122,.15);
+  border-color:#4bc87a;
+  color:#4bc87a;
+  box-shadow:0 0 12px rgba(75,200,122,.25);
+}
 
 /* 3-column grid of pick cards */
 .picks-grid{
   display:grid;
   grid-template-columns:repeat(3,1fr);
   gap:12px;
+  align-items:start;
 }
 
 .pick-card{
@@ -408,7 +451,49 @@ body{background:var(--bg);color:var(--text);overflow-x:hidden}
 }
 
 .pick-body{padding:8px 10px 10px}
-.pick-name{font-size:14px;font-weight:700;color:#e8dcc4;margin-bottom:6px;letter-spacing:.5px}
+.pick-hdr-row{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:6px;
+  margin-bottom:4px;
+}
+.pick-name{font-size:14px;font-weight:700;color:#e8dcc4;letter-spacing:.5px}
+
+.diff-badge{
+  font-size:8.5px;
+  font-weight:700;
+  letter-spacing:.6px;
+  text-transform:uppercase;
+  padding:1px 6px;
+  border-radius:3px;
+  white-space:nowrap;
+}
+.diff-badge.easy{
+  background:rgba(75,200,122,.15);
+  color:#4bc87a;
+  border:1px solid rgba(75,200,122,.4);
+}
+.diff-badge.moderate{
+  background:rgba(200,168,75,.15);
+  color:#c8a84b;
+  border:1px solid rgba(200,168,75,.4);
+}
+.diff-badge.hard{
+  background:rgba(200,75,75,.15);
+  color:#f87171;
+  border:1px solid rgba(200,75,75,.4);
+}
+
+.pick-overview{
+  font-size:10.5px;
+  line-height:1.35;
+  color:#94a3b8;
+  margin-bottom:6px;
+  padding-left:6px;
+  border-left:2px solid rgba(200,168,75,.35);
+}
+
 .pick-reasons{display:flex;flex-direction:column;gap:3px}
 .preason{
   font-size:10px;color:var(--dim);
@@ -418,6 +503,104 @@ body{background:var(--bg);color:var(--text);overflow-x:hidden}
 .preason.counter{color:#8bc4a8}
 .preason.synergy{color:#7aabcc}
 .preason.meta{color:#c8a84b}
+
+.btn-guide-toggle{
+  width:100%;
+  margin-top:8px;
+  padding:5px 8px;
+  background:rgba(200,168,75,.07);
+  border:1px solid rgba(200,168,75,.25);
+  color:var(--gold);
+  border-radius:3px;
+  font-family:'Rajdhani',sans-serif;
+  font-size:10.5px;
+  font-weight:700;
+  letter-spacing:.8px;
+  cursor:pointer;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  transition:all .15s;
+}
+.btn-guide-toggle:hover{
+  background:rgba(200,168,75,.15);
+  border-color:var(--gold);
+}
+.btn-guide-toggle .arrow{
+  font-size:8px;
+  transition:transform .2s ease;
+}
+.btn-guide-toggle.open .arrow{
+  transform:rotate(180deg);
+}
+
+.guide-details{
+  margin-top:8px;
+  display:flex;
+  flex-direction:column;
+  gap:7px;
+  animation:fadeIn .2s ease;
+}
+.guide-item{
+  background:rgba(0,0,0,.35);
+  border:1px solid rgba(255,255,255,.07);
+  border-radius:4px;
+  padding:7px 8px;
+  display:flex;
+  flex-direction:column;
+  gap:5px;
+}
+.guide-item-hdr{
+  display:flex;
+  align-items:center;
+  gap:6px;
+}
+.guide-target-img{
+  width:22px;
+  height:13px;
+  object-fit:cover;
+  border-radius:2px;
+  border:1px solid var(--border);
+  flex-shrink:0;
+}
+.guide-item-title{
+  font-size:10.5px;
+  font-weight:700;
+  letter-spacing:.4px;
+}
+.guide-item-title.counter{color:#8bc4a8}
+.guide-item-title.synergy{color:#7aabcc}
+.guide-item-title.meta{color:#c8a84b}
+
+.guide-how{
+  font-size:10.5px;
+  line-height:1.4;
+  color:#cbd5e1;
+}
+.guide-abilities{
+  display:flex;
+  flex-wrap:wrap;
+  gap:4px;
+  margin-top:2px;
+}
+.ability-pill{
+  font-size:9px;
+  font-weight:600;
+  color:#93c5fd;
+  background:rgba(59,130,246,.12);
+  border:1px solid rgba(59,130,246,.3);
+  padding:1px 5px;
+  border-radius:2px;
+}
+.guide-tip-box{
+  background:rgba(200,168,75,.08);
+  border-left:2px solid var(--gold);
+  border-radius:0 3px 3px 0;
+  padding:4px 6px;
+  font-size:10px;
+  line-height:1.35;
+  color:#fef08a;
+}
 
 /* No results */
 .no-picks{
@@ -677,13 +860,15 @@ body{background:var(--bg);color:var(--text);overflow-x:hidden}
 `;
 
 export default function Dota2Drafter() {
-  const [mode,    setMode]    = useState("enemy");
-  const [enemy,   setEnemy]   = useState([]);  // frontend hero IDs
-  const [team,    setTeam]    = useState([]);
-  const [search,  setSearch]  = useState("");
-  const [picks,   setPicks]   = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [apiErr,  setApiErr]  = useState("");
+  const [mode,            setMode]            = useState("enemy");
+  const [enemy,           setEnemy]           = useState([]);  // frontend hero IDs
+  const [team,            setTeam]            = useState([]);
+  const [search,          setSearch]          = useState("");
+  const [picks,           setPicks]           = useState(null);
+  const [loading,         setLoading]         = useState(false);
+  const [apiErr,          setApiErr]          = useState("");
+  const [beginnerOnly,    setBeginnerOnly]    = useState(false);
+  const [expandedCardIds, setExpandedCardIds] = useState(new Set());
   const styleRef = useRef(false);
 
   useEffect(() => {
@@ -731,7 +916,16 @@ export default function Dota2Drafter() {
     setPicks(null);
   }
   function clearAll() {
-    setEnemy([]); setTeam([]); setPicks(null); setApiErr("");
+    setEnemy([]); setTeam([]); setPicks(null); setApiErr(""); setExpandedCardIds(new Set());
+  }
+
+  function toggleCardGuide(id) {
+    setExpandedCardIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   }
 
   async function handleSuggest() {
@@ -747,7 +941,11 @@ export default function Dota2Drafter() {
       });
       if (!res.ok) throw new Error(`${res.status}`);
       const data = await res.json();
-      setPicks(data.picks || []);
+      const resPicks = data.picks || [];
+      setPicks(resPicks);
+      if (resPicks.length > 0) {
+        setExpandedCardIds(new Set([resPicks[0].id]));
+      }
       setTimeout(() => {
         const el = document.getElementById("results-section");
         if (el) el.scrollIntoView({ behavior: "smooth" });
@@ -758,6 +956,12 @@ export default function Dota2Drafter() {
       setLoading(false);
     }
   }
+
+  const displayedPicks = useMemo(() => {
+    if (!picks) return null;
+    if (!beginnerOnly) return picks;
+    return picks.filter(p => (p.difficulty || "Easy") === "Easy");
+  }, [picks, beginnerOnly]);
 
   const enemyHeroes = enemy.map(heroById).filter(Boolean);
   const teamHeroes  = team.map(heroById).filter(Boolean);
@@ -797,6 +1001,11 @@ export default function Dota2Drafter() {
             className={`btn btn-ally${mode==="team" ? " on" : ""}`}
             onClick={() => setMode("team")}
           >✓ Ally</button>
+          <button
+            className={`btn btn-beginner${beginnerOnly ? " on" : ""}`}
+            onClick={() => setBeginnerOnly(b => !b)}
+            title="Filter to beginner-friendly heroes only"
+          >🐣 Beginner {beginnerOnly ? "ON" : "OFF"}</button>
           <button
             className={`btn btn-suggest${loading ? " spinning" : ""}`}
             onClick={handleSuggest}
@@ -927,18 +1136,35 @@ export default function Dota2Drafter() {
       {/* RESULTS — flat grid */}
       {(picks !== null || apiErr) && (
         <section className="results" id="results-section">
-          <div className="res-title">🎯 RECOMMENDED PICKS</div>
+          <div className="res-hdr">
+            <div className="res-title">🎯 RECOMMENDED PICKS</div>
+            <div className="res-controls">
+              <button
+                className={`btn-filter-pill ${beginnerOnly ? "active" : ""}`}
+                onClick={() => setBeginnerOnly(b => !b)}
+              >
+                🐣 Beginner Friendly Only {beginnerOnly ? "✓" : ""}
+              </button>
+            </div>
+          </div>
           {apiErr && <div className="err-msg">⚠ {apiErr}</div>}
           {picks && picks.length === 0 && (
             <div className="no-picks">
               No counter picks found — check /debug for name alignment
             </div>
           )}
-          {picks && picks.length > 0 && (
+          {picks && picks.length > 0 && displayedPicks.length === 0 && (
+            <div className="no-picks">
+              No Beginner (Easy) heroes among top suggestions. Turn off 🐣 Beginner filter to see all recommendations.
+            </div>
+          )}
+          {displayedPicks && displayedPicks.length > 0 && (
             <div className="picks-grid">
-              {picks.map((p, idx) => {
+              {displayedPicks.map((p, idx) => {
                 const imgKey = NAME_TO_IMG[p.name] ||
                   p.name.toLowerCase().replace(/ /g,"_").replace(/'/g,"");
+                const diff = p.difficulty || "Easy";
+                const isExpanded = expandedCardIds.has(p.id);
                 return (
                   <div className="pick-card" key={p.id}>
                     <div className="pick-img-wrap">
@@ -964,12 +1190,77 @@ export default function Dota2Drafter() {
                       </div>
                     </div>
                     <div className="pick-body">
-                      <div className="pick-name">{p.name}</div>
+                      <div className="pick-hdr-row">
+                        <div className="pick-name">{p.name}</div>
+                        <span className={`diff-badge ${diff.toLowerCase()}`}>
+                          {diff === "Easy" ? "🟢 Easy" : diff === "Moderate" ? "🟡 Moderate" : "🔴 Complex"}
+                        </span>
+                      </div>
+
+                      {p.overview && (
+                        <div className="pick-overview">{p.overview}</div>
+                      )}
+
                       <div className="pick-reasons">
-                        {p.reasons.map((r, i) => (
+                        {(p.reasons || []).map((r, i) => (
                           <div className={`preason ${reasonClass(r)}`} key={i}>{r}</div>
                         ))}
                       </div>
+
+                      {p.reason_details && p.reason_details.length > 0 && (
+                        <>
+                          <button
+                            className={`btn-guide-toggle ${isExpanded ? "open" : ""}`}
+                            onClick={() => toggleCardGuide(p.id)}
+                          >
+                            <span>💡 Why & How It Works ({p.reason_details.length})</span>
+                            <span className="arrow">▼</span>
+                          </button>
+
+                          {isExpanded && (
+                            <div className="guide-details">
+                              {p.reason_details.map((detail, dIdx) => {
+                                const targetImgKey = detail.target_hero
+                                  ? (NAME_TO_IMG[detail.target_hero] ||
+                                     detail.target_hero.toLowerCase().replace(/ /g, "_").replace(/'/g, ""))
+                                  : null;
+                                return (
+                                  <div className="guide-item" key={dIdx}>
+                                    <div className="guide-item-hdr">
+                                      {targetImgKey && (
+                                        <img
+                                          src={IMG(targetImgKey)}
+                                          alt={detail.target_hero}
+                                          className="guide-target-img"
+                                          onError={e => { e.target.style.display = "none"; }}
+                                        />
+                                      )}
+                                      <span className={`guide-item-title ${detail.reason_type || "counter"}`}>
+                                        {detail.summary}
+                                      </span>
+                                    </div>
+                                    {detail.how_and_why && (
+                                      <div className="guide-how">{detail.how_and_why}</div>
+                                    )}
+                                    {detail.key_abilities && detail.key_abilities.length > 0 && (
+                                      <div className="guide-abilities">
+                                        {detail.key_abilities.map(ab => (
+                                          <span key={ab} className="ability-pill">⚡ {ab}</span>
+                                        ))}
+                                      </div>
+                                    )}
+                                    {detail.beginner_tip && (
+                                      <div className="guide-tip-box">
+                                        💡 <strong>Beginner Tip:</strong> {detail.beginner_tip}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </>
+                      )}
                     </div>
                   </div>
                 );
@@ -990,6 +1281,10 @@ export default function Dota2Drafter() {
             className={`btn btn-ally${mode==="team" ? " on" : ""}`}
             onClick={() => setMode("team")}
           >✓ Ally</button>
+          <button
+            className={`btn btn-beginner${beginnerOnly ? " on" : ""}`}
+            onClick={() => setBeginnerOnly(b => !b)}
+          >🐣 {beginnerOnly ? "Easy" : "All"}</button>
         </div>
         <button
           className={`btn btn-suggest${loading ? " spinning" : ""}`}

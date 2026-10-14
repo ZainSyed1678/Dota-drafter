@@ -3,6 +3,12 @@ import pickle
 from typing import Dict, Tuple, List, Any
 from logger import get_logger
 from config import settings
+from hero_knowledge import (
+    get_hero_difficulty,
+    get_hero_overview,
+    explain_counter,
+    explain_synergy,
+)
 
 log = get_logger("dota-api.scoring")
 
@@ -128,8 +134,10 @@ def synergy_score(hero_id: int, ally_ids: List[int]) -> float:
         total += v - 0.5
     return total / len(ally_ids)
 
-def build_reasons(hero_id: int, enemy_ids: List[int], enemy_names: List[str], ally_ids: List[int], ally_names: List[str]) -> List[str]:
-    reasons = []
+def build_reasons_and_details(hero_id: int, enemy_ids: List[int], enemy_names: List[str], ally_ids: List[int], ally_names: List[str]) -> Tuple[List[str], List[dict]]:
+    reasons: List[str] = []
+    details: List[dict] = []
+    hero_name = id_to_name.get(hero_id, "This hero")
     bl = hero_avg_matchup.get(hero_id, 0.5)
 
     counters, neutral = [], []
@@ -146,12 +154,32 @@ def build_reasons(hero_id: int, enemy_ids: List[int], enemy_names: List[str], al
 
     if counters:
         for name, adj in counters:
-            reasons.append(f"Counters {name} ({adj:+.3f} WR)")
+            summary_str = f"Counters {name} ({adj:+.3f} WR)"
+            reasons.append(summary_str)
+            explanation = explain_counter(hero_name, name, adj)
+            details.append(explanation)
     elif neutral:
         for name, adj in neutral[:2]:
-            reasons.append(f"Even vs {name} ({adj:+.3f} WR)")
+            summary_str = f"Even vs {name} ({adj:+.3f} WR)"
+            reasons.append(summary_str)
+            details.append({
+                "summary": summary_str,
+                "target_hero": name,
+                "reason_type": "meta",
+                "how_and_why": f"{hero_name} trades evenly into {name} in the current patch without significant lane or game disadvantage.",
+                "key_abilities": [],
+                "beginner_tip": f"Play around your team's power spikes and stick close to allies when fighting {name}."
+            })
     else:
         reasons.append("Picked for synergy / meta")
+        details.append({
+            "summary": "Picked for synergy / meta",
+            "target_hero": "",
+            "reason_type": "meta",
+            "how_and_why": f"{hero_name} provides stable teamfight control and general utility that fits the current draft balance.",
+            "key_abilities": [],
+            "beginner_tip": "Focus on hitting core item timings and group up for team objectives."
+        })
 
     syn = []
     for aid, aname in zip(ally_ids, ally_names):
@@ -161,12 +189,28 @@ def build_reasons(hero_id: int, enemy_ids: List[int], enemy_names: List[str], al
             syn.append((aname, adj))
     syn.sort(key=lambda x: x[1], reverse=True)
     for name, adj in syn[:2]:
-        reasons.append(f"Synergy: {name} ({adj:+.3f} WR)")
+        summary_str = f"Synergy: {name} ({adj:+.3f} WR)"
+        reasons.append(summary_str)
+        explanation = explain_synergy(hero_name, name, adj)
+        details.append(explanation)
 
     wr = hero_winrate.get(hero_id, 0.5)
     if wr > 0.53:
-        reasons.append(f"Meta strong ({wr:.1%} WR)")
+        summary_str = f"Meta strong ({wr:.1%} WR)"
+        reasons.append(summary_str)
+        details.append({
+            "summary": summary_str,
+            "target_hero": "",
+            "reason_type": "meta",
+            "how_and_why": f"{hero_name} maintains a strong {wr:.1%} overall winrate, making them an inherently high-value pick in the current meta.",
+            "key_abilities": [],
+            "beginner_tip": "A very forgiving pick with strong fundamental stats and reliable execution."
+        })
 
+    return reasons, details
+
+def build_reasons(hero_id: int, enemy_ids: List[int], enemy_names: List[str], ally_ids: List[int], ally_names: List[str]) -> List[str]:
+    reasons, _ = build_reasons_and_details(hero_id, enemy_ids, enemy_names, ally_ids, ally_names)
     return reasons
 
 def predict(hero_id: int, enemy_ids: List[int], ally_ids: List[int], engine: str = 'heuristic') -> float:

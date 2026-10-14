@@ -208,12 +208,19 @@ def suggest(request: Request, req: DraftRequest):
 
     picks = []
     for hero_id, score in scored[:9]:
+        hero_name = scoring.id_to_name[hero_id]
+        reasons, reason_details = scoring.build_reasons_and_details(
+            hero_id, enemy_ids, req.enemy, ally_ids, req.team
+        )
         picks.append(HeroSuggestion(
-            id      = hero_id,
-            name    = scoring.id_to_name[hero_id],
-            score   = round(score, 4),
-            reasons = scoring.build_reasons(hero_id, enemy_ids, req.enemy, ally_ids, req.team),
-            roles   = scoring.get_roles(hero_id),
+            id             = hero_id,
+            name           = hero_name,
+            score          = round(score, 4),
+            reasons        = reasons,
+            reason_details = reason_details,
+            roles          = scoring.get_roles(hero_id),
+            difficulty     = scoring.get_hero_difficulty(hero_name),
+            overview       = scoring.get_hero_overview(hero_name),
         ))
 
     return SuggestResponse(picks=picks)
