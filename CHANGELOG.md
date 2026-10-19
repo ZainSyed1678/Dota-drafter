@@ -17,3 +17,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Confirmed that the LightGBM/XGBoost model is bypassed in production `/suggest` due to `PREDICTION_ENGINE = "heuristic"`.
 - Identified that frontend hardcodes arbitrary hero IDs (1..121) rather than Valve/OpenDota hero IDs, passing strings over the wire.
 - Documented dead scripts: `patch.py`, `train_scheduler.py`, `collect_to_psql.py`, `core/utils.py`, `main.py` (root).
+
+## [Phase 1 — Fix Evaluation & Leakage Elimination] - 2026-10-19
+
+### Added
+- `ml_pipeline/evaluate.py`: Standalone evaluation script enforcing strict chronological time-based splitting (train: 10,434, val: 2,236, test: 2,237 matches).
+- `ml_pipeline/reports/metrics.json`: Empirical benchmark evaluation on test set across accuracy, log-loss, ROC-AUC, and Brier score.
+- `ml_pipeline/reports/calibration_curve.png`: Calibration reliability diagrams for baselines and LightGBM model.
+
+### Changed
+- `Readme.md`: Replaced fabricated 69–72% accuracy claim with real, leakage-free benchmark numbers (52.79% - 55.52%) and an explanation of the statistical ceiling of draft-only win prediction.
+
+### Fixed
+- **Zero-Leakage Guarantee**: Hero global win rates, matchup matrices, and synergy matrices are calculated strictly using training data only, eliminating target leakage into validation and test sets.
+

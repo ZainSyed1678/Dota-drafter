@@ -263,15 +263,17 @@ Returns top 9 counter-pick recommendations.
 
 ## Model Performance
 
-| Metric | Value |
-|---|---|
-| Dataset size | ~250,000 matches |
-| Features | Hero presence (one-hot) + matchup + synergy + winrate |
-| Model | LightGBM (1200 estimators, 127 leaves) |
-| Test accuracy | ~69–72% |
-| Training time | ~3–5 minutes |
+Evaluation conducted on a strictly **time-based, leakage-free benchmark** (14,907 valid 5v5 matches: 10,434 train, 2,236 validation, 2,237 test ordered chronologically by `match_id`). All matchup, synergy, and win rate features were computed strictly from the training slice with zero data leakage into validation or test sets.
 
-> Note: Win prediction accuracy in Dota 2 is fundamentally limited — individual skill, communication, and in-game decisions account for a large portion of outcomes. The model's purpose is to surface statistically meaningful counter-pick patterns, not to predict individual match outcomes.
+| Model / Baseline | Test Accuracy | Log-Loss | ROC-AUC | Brier Score |
+| :--- | :---: | :---: | :---: | :---: |
+| **Baseline: Radiant Prior** (Always predict Radiant) | 52.44% | 0.6924 | 0.5000 | 0.2496 |
+| **Baseline: Sum of Hero Win Rates** (Global meta strength) | 55.52% | 0.6848 | 0.5713 | 0.2459 |
+| **Baseline: Matchup-Only Score** (Pairwise counter matrix) | 53.82% | 0.8390 | 0.5564 | 0.2937 |
+| **LightGBM Classifier** (Tuned on validation slice) | 52.79% | 0.6920 | 0.5314 | 0.2494 |
+
+> **Methodological Note on Win Prediction Limits:**  
+> The previously claimed ~69–72% accuracy was an artifact of severe data leakage (matchup/synergy statistics precomputed over the entire dataset before a random split). When evaluated under strict temporal separation, draft-only win prediction sits realistically between **53% and 56%**. Draft advantage accounts for an initial statistical edge, but in-game mechanical execution, lane farm, objective rotations, item timings, and player variance determine the final outcome. The system's purpose is to identify robust counter-pick advantages, not to guarantee individual match predictions. Full metrics are recorded in `ml_pipeline/reports/metrics.json` and `ml_pipeline/reports/calibration_curve.png`.
 
 ---
 
