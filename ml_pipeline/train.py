@@ -1,249 +1,399 @@
-import pandas as pd
-import numpy as np
-import requests
-import ast
+"""
+Dota 2 Drafter - Leakage-Free Training Pipeline with Empirical-Bayes Shrinkage & Learned Combiner
+Implements Phase 2:
+- Strict chronological time-based split (Train 70%, Validation 15%, Test 15%)
+- Recency weighting on training matches
+- Empirical-Bayes / Beta-prior shrinkage for matchup and synergy matrices
+- Sample size and confidence level tracking
+- LightGBM model training with early stopping
+- Learned combination weights via Logistic Regression on the validation slice
+- Serializes model artifacts and metadata.json
+"""
+
 import os
+import sys
+import json
+import ast
 import argparse
 import pickle
-import sys
+import datetime
 from pathlib import Path
-from collections import Counter
-from sklearn.model_selection import train_test_split
-from xgboost import XGBClassifier
-from sklearn.metrics import log_loss
+from collections import defaultdict, Counter
+
+import numpy as np
+import pandas as pd
+import requests
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score, log_loss, roc_auc_score, brier_score_loss
+import lightgbm as lgb
+
 
 def clean_team(x):
+    """Clean team string or list into list of valid hero integers."""
     try:
-        x = str(x)
         while isinstance(x, str):
             try:
                 x = ast.literal_eval(x)
-            except:
+            except Exception:
                 break
         if isinstance(x, str):
-            x = x.replace('[','').replace(']','')
+            x = x.replace('[', '').replace(']', '')
             x = [int(i.strip()) for i in x.split(',') if i.strip().isdigit()]
-        return list(x)
-    except:
+        return [int(h) for h in x if int(h) > 0]
+    except Exception:
         return []
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--input_csv", type=str, required=True, help="Path to the versioned matches CSV")
-    default_out = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "backend", "model")
-    parser.add_argument("--output_dir", type=str, default=default_out, help="Directory to save the trained pkl files")
-    args = parser.parse_args()
 
-    input_path = Path(args.input_csv)
+def load_hero_metadata():
+    """Load hero names and roles from OpenDota API with local cache fallback."""
+    try:
+        resp = requests.get("https://api.opendota.com/api/heroes", timeout=8)
+        if resp.status_code == 200:
+            hero_data = resp.json()
+            hero_map = {int(h['id']): h['localized_name'] for h in hero_data}
+            api_roles = {int(h['id']): h.get('roles', []) for h in hero_data}
+            
+            hero_roles = {}
+            for hid, roles in api_roles.items():
+                clean = []
+                if "Carry" in roles: clean.append("carry")
+                if "Nuker" in roles: clean.append("mid")
+                if "Initiator" in roles or "Durable" in roles: clean.append("offlane")
+                if "Support" in roles: clean.append("support")
+                if not clean: clean = ["offlane"]
+                hero_roles[hid] = list(set(clean))
+            return hero_map, hero_roles
+    except Exception as e:
+        print(f"Warning: OpenDota API unavailable ({e}), falling back to cached hero metadata.")
+
+    # Fallback to backend/model if exists
+    cache_dir = Path(__file__).resolve().parent.parent / "backend" / "model"
+    hero_map_path = cache_dir / "hero_map.pkl"
+    roles_path = cache_dir / "roles.pkl"
+    if hero_map_path.exists() and roles_path.exists():
+        with open(hero_map_path, "rb") as f: hero_map = pickle.load(f)
+        with open(roles_path, "rb") as f: hero_roles = pickle.load(f)
+        return hero_map, hero_roles
+
+    # Minimal fallback
+    return {}, {}
+
+
+def build_lgb_features(df_in, sorted_heroes, hero_to_idx, hero_wr):
+    """Build input vectors for LightGBM."""
+    num_heroes = len(sorted_heroes)
+    X = []
+    for _, row in df_in.iterrows():
+        vec = np.zeros(num_heroes, dtype=np.float32)
+        for h in row['radiant_team']:
+            if h in hero_to_idx:
+                vec[hero_to_idx[h]] = 1.0
+        for h in row['dire_team']:
+            if h in hero_to_idx:
+                vec[hero_to_idx[h]] = -1.0
+        r_wr = float(np.mean([hero_wr.get(h, 0.50) for h in row['radiant_team']]))
+        d_wr = float(np.mean([hero_wr.get(h, 0.50) for h in row['dire_team']]))
+        extra = [r_wr, d_wr, r_wr - d_wr]
+        X.append(np.concatenate([vec, extra]))
+    return np.array(X, dtype=np.float32)
+
+
+def extract_score_components(df_in, hero_wr, global_prior, matchup_dict, synergy_dict):
+    """Extract symmetric draft score components: Matchup (M), Synergy (S), and Meta WR (W)."""
+    M_list, S_list, W_list = [], [], []
+    for _, row in df_in.iterrows():
+        r_team = row['radiant_team']
+        d_team = row['dire_team']
+
+        m_score = 0.0
+        for r in r_team:
+            prior_r = hero_wr.get(r, global_prior)
+            for d in d_team:
+                m_score += (matchup_dict.get((r, d), prior_r) - prior_r)
+        for d in d_team:
+            prior_d = hero_wr.get(d, global_prior)
+            for r in r_team:
+                m_score -= (matchup_dict.get((d, r), prior_d) - prior_d)
+        M_list.append(m_score / 25.0)
+
+        s_score = 0.0
+        for i in range(len(r_team)):
+            for j in range(i + 1, len(r_team)):
+                p = (min(r_team[i], r_team[j]), max(r_team[i], r_team[j]))
+                s_score += (synergy_dict.get(p, 0.50) - 0.50)
+        for i in range(len(d_team)):
+            for j in range(i + 1, len(d_team)):
+                p = (min(d_team[i], d_team[j]), max(d_team[i], d_team[j]))
+                s_score -= (synergy_dict.get(p, 0.50) - 0.50)
+        S_list.append(s_score / 10.0)
+
+        w_score = np.mean([hero_wr.get(h, 0.50) for h in r_team]) - np.mean([hero_wr.get(h, 0.50) for h in d_team])
+        W_list.append(w_score)
+
+    return np.column_stack([M_list, S_list, W_list])
+
+
+def train_pipeline(input_csv: str, output_dir: str, k_matchup: float = 20.0, k_synergy: float = 20.0, recency_lambda: float = 0.2):
+    print("=" * 70)
+    print("Dota 2 Drafter - Model Training & Learned Scoring Pipeline (Phase 2)")
+    print("=" * 70)
+
+    input_path = Path(input_csv)
     if not input_path.exists():
-        print(f"File not found: {input_path}")
-        sys.exit(1)
+        raise FileNotFoundError(f"Dataset not found at {input_path}")
 
-    print(f"Loading data from {input_path}...")
+    print(f"Loading match data from {input_path}...")
     df = pd.read_csv(input_path)
-
     df['radiant_team'] = df['radiant_team'].apply(clean_team)
     df['dire_team'] = df['dire_team'].apply(clean_team)
 
-    df = df[
-        (df['radiant_team'].apply(lambda x: len(x) == 5 and all(h != 0 for h in x))) &
-        (df['dire_team'].apply(lambda x: len(x) == 5 and all(h != 0 for h in x)))
-    ]
+    # 5v5 validation: exactly 5 distinct heroes per team, no overlap
+    valid_mask = (
+        df['radiant_team'].apply(lambda t: len(t) == 5 and len(set(t)) == 5) &
+        df['dire_team'].apply(lambda t: len(t) == 5 and len(set(t)) == 5) &
+        df.apply(lambda r: len(set(r['radiant_team']) & set(r['dire_team'])) == 0, axis=1)
+    )
+    df = df[valid_mask].sort_values('match_id').reset_index(drop=True)
+    total_valid = len(df)
+    print(f"Valid 5v5 matches: {total_valid}")
 
-    print(f"Valid 5v5 matches: {len(df)}")
-    
-    if len(df) == 0:
-        print("Dataset is empty after cleaning!")
-        sys.exit(1)
+    # Chronological time-based split
+    n_train = int(total_valid * 0.70)
+    n_val = int(total_valid * 0.15)
+    train_df = df.iloc[:n_train].copy().reset_index(drop=True)
+    val_df = df.iloc[n_train:n_train + n_val].copy().reset_index(drop=True)
+    test_df = df.iloc[n_train + n_val:].copy().reset_index(drop=True)
 
-    hero_counts = Counter()
-    for _, row in df.iterrows():
-        hero_counts.update(row['radiant_team'])
-        hero_counts.update(row['dire_team'])
+    y_train = train_df['radiant_win'].astype(int).values
+    y_val = val_df['radiant_win'].astype(int).values
+    y_test = test_df['radiant_win'].astype(int).values
 
-    MIN_GAMES = 1
-    # Note: MIN_GAMES set to 1 for small testing datasets so training doesn't crash on 100 matches
-    # In production, this can be increased if match count > 1000.
-    if len(df) > 1000:
-        MIN_GAMES = 10
+    print(f"Splits: Train={len(train_df)} | Val={len(val_df)} | Test={len(test_df)}")
 
-    valid_heroes = {h for h, count in hero_counts.items() if count >= MIN_GAMES}
+    # Hero indexing based on training set
+    all_heroes = set()
+    for _, r in train_df.iterrows():
+        all_heroes.update(r['radiant_team'])
+        all_heroes.update(r['dire_team'])
+    sorted_heroes = sorted(list(all_heroes))
+    hero_to_idx = {h: i for i, h in enumerate(sorted_heroes)}
+    print(f"Total unique heroes in training set: {len(sorted_heroes)}")
 
-    df = df[
-        df['radiant_team'].apply(lambda team: all(h in valid_heroes for h in team)) &
-        df['dire_team'].apply(lambda team: all(h in valid_heroes for h in team))
-    ]
+    hero_map, hero_roles = load_hero_metadata()
+    for h in sorted_heroes:
+        if h not in hero_map:
+            hero_map[h] = f"Hero_{h}"
+        if h not in hero_roles:
+            hero_roles[h] = ["offlane"]
 
-    heroes = sorted(list(valid_heroes))
-    hero_to_idx = {h: i for i, h in enumerate(heroes)}
-    NUM_HEROES = len(heroes)
+    # Recency weights on training set
+    N_tr = len(train_df)
+    if recency_lambda > 0:
+        pos = np.linspace(0, 1, N_tr)
+        weights = np.exp(-recency_lambda * (1.0 - pos))
+    else:
+        weights = np.ones(N_tr)
 
-    print(f"Total valid heroes after MIN_GAMES ({MIN_GAMES}) filter: {NUM_HEROES}")
-    
-    if NUM_HEROES == 0 or len(df) < 5:
-        print("Not enough data to train. Exiting gracefully.")
-        sys.exit(0)
+    print(f"Computing recency-weighted statistics (lambda={recency_lambda})...")
+    hero_wins = defaultdict(float)
+    hero_games = defaultdict(float)
+    matchup_wins = defaultdict(float)
+    matchup_games = defaultdict(float)
+    synergy_wins = defaultdict(float)
+    synergy_games = defaultdict(float)
 
-    # 1. Hero Map and Roles
-    try:
-        hero_data = requests.get("https://api.opendota.com/api/heroes").json()
-        hero_map = {h['id']: h['localized_name'] for h in hero_data}
-        api_roles = {h['id']: h.get('roles', []) for h in hero_data}
-    except Exception as e:
-        print(f"Error fetching hero API: {e}")
-        hero_map = {}
-        api_roles = {}
+    for idx, row in train_df.iterrows():
+        w = weights[idx]
+        r_win = 1.0 if row['radiant_win'] else 0.0
+        r_team = row['radiant_team']
+        d_team = row['dire_team']
 
-    hero_roles = {}
-    for hid in hero_to_idx.keys():
-        roles = api_roles.get(hid, [])
-        clean = []
-        if "Carry" in roles: clean.append("carry")
-        if "Nuker" in roles: clean.append("mid")
-        if "Initiator" in roles or "Durable" in roles: clean.append("offlane")
-        if "Support" in roles: clean.append("support")
-        if not clean: clean = ["offlane"]
-        hero_roles[hid] = list(set(clean))
+        for h in r_team:
+            hero_wins[h] += w * r_win
+            hero_games[h] += w
+        for h in d_team:
+            hero_wins[h] += w * (1.0 - r_win)
+            hero_games[h] += w
 
-    # 2. Matchup Matrix
-    matchups = []
-    for _, row in df.iterrows():
-        r = row['radiant_team']
-        d = row['dire_team']
-        win = row['radiant_win']
-        for a in r:
-            for b in d:
-                matchups.append((a, b, win))
-                matchups.append((b, a, 1 - win))
-    matchups_df = pd.DataFrame(matchups, columns=['hero_1', 'hero_2', 'win'])
-    winrates = matchups_df.groupby(['hero_1', 'hero_2'])['win'].mean().reset_index()
-    
-    matchup_matrix = {}
-    for _, row in winrates.iterrows():
-        matchup_matrix[(row['hero_1'], row['hero_2'])] = row['win']
+        for h1 in r_team:
+            for h2 in d_team:
+                matchup_wins[(h1, h2)] += w * r_win
+                matchup_games[(h1, h2)] += w
+                matchup_wins[(h2, h1)] += w * (1.0 - r_win)
+                matchup_games[(h2, h1)] += w
 
-    # 3. Synergy Matrix
-    synergy_matrix = {}
-    pair_counts = {}
-    for _, row in df.iterrows():
-        team = row['radiant_team']
-        win = row['radiant_win']
-        for i in range(len(team)):
-            for j in range(i+1, len(team)):
-                pair = (team[i], team[j])
-                pair_counts[pair] = pair_counts.get(pair, [0, 0])
-                pair_counts[pair][0] += win
-                pair_counts[pair][1] += 1
-                
-        team = row['dire_team']
-        win = 1 - row['radiant_win']
-        for i in range(len(team)):
-            for j in range(i+1, len(team)):
-                pair = (team[i], team[j])
-                pair_counts[pair] = pair_counts.get(pair, [0, 0])
-                pair_counts[pair][0] += win
-                pair_counts[pair][1] += 1
+        for i in range(len(r_team)):
+            for j in range(i + 1, len(r_team)):
+                p1 = (min(r_team[i], r_team[j]), max(r_team[i], r_team[j]))
+                synergy_wins[p1] += w * r_win
+                synergy_games[p1] += w
 
-    for pair, (wins, games) in pair_counts.items():
-        synergy_matrix[pair] = wins / games
+        for i in range(len(d_team)):
+            for j in range(i + 1, len(d_team)):
+                p2 = (min(d_team[i], d_team[j]), max(d_team[i], d_team[j]))
+                synergy_wins[p2] += w * (1.0 - r_win)
+                synergy_games[p2] += w
 
-    # 4. Hero Winrates
-    hero_games = {}
-    hero_wins = {}
-    for _, row in df.iterrows():
-        for h in row['radiant_team']:
-            hero_games[h] = hero_games.get(h, 0) + 1
-            hero_wins[h] = hero_wins.get(h, 0) + row['radiant_win']
-        for h in row['dire_team']:
-            hero_games[h] = hero_games.get(h, 0) + 1
-            hero_wins[h] = hero_wins.get(h, 0) + (1 - row['radiant_win'])
-            
     hero_winrate = {}
-    for h in hero_to_idx.keys():
-        if hero_games.get(h, 0) > 0:
+    for h in sorted_heroes:
+        if hero_games[h] > 0:
             hero_winrate[h] = hero_wins[h] / hero_games[h]
         else:
-            hero_winrate[h] = 0.5
+            hero_winrate[h] = 0.50
 
-    # 5. Build Training Vectors
-    X, y = [], []
-    for _, row in df.iterrows():
-        vec = []
-        hero_vec = np.zeros(NUM_HEROES)
-        for h in row['radiant_team']:
-            hero_vec[hero_to_idx[h]] = 1
-        for h in row['dire_team']:
-            hero_vec[hero_to_idx[h]] = -1
-        vec.extend(hero_vec)
-        
-        radiant_wr = np.mean([hero_winrate.get(h, 0.5) for h in row['radiant_team']])
-        dire_wr = np.mean([hero_winrate.get(h, 0.5) for h in row['dire_team']])
-        vec.append(2 * radiant_wr)
-        vec.append(2 * dire_wr)
-        vec.append(3 * (radiant_wr - dire_wr))
-        
-        matchup_score = 0
-        for r in row['radiant_team']:
-            for d in row['dire_team']:
-                matchup_score += matchup_matrix.get((r, d), 0.5) - 0.5
-        vec.append(4 * matchup_score)
-        
-        synergy_score = 0
-        team = row['radiant_team']
-        for i in range(len(team)):
-            for j in range(i+1, len(team)):
-                pair = (team[i], team[j])
-                rev_pair = (team[j], team[i])
-                val = synergy_matrix.get(pair, synergy_matrix.get(rev_pair, 0.5))
-                synergy_score += (val - 0.5)
-        vec.append(2 * synergy_score)
-        
-        X.append(vec)
-        y.append(row['radiant_win'])
+    global_prior = float(np.mean(list(hero_winrate.values()))) if hero_winrate else 0.50
+    hero_avg_matchup = {h: hero_winrate.get(h, 0.50) for h in sorted_heroes}
 
-    X = np.array(X)
-    y = np.array(y)
+    # Empirical-Bayes Shrinkage
+    print(f"Applying Empirical-Bayes Shrinkage (k_matchup={k_matchup}, k_synergy={k_synergy})...")
+    shrunk_matchup = {}
+    matchup_sample_sizes = {}
+    for pair, g in matchup_games.items():
+        h1, h2 = pair
+        prior = hero_winrate.get(h1, global_prior)
+        shrunk_matchup[pair] = (matchup_wins[pair] + k_matchup * prior) / (g + k_matchup)
+        matchup_sample_sizes[pair] = int(round(g))
 
-    print(f"X shape: {X.shape}, y shape: {y.shape}")
+    shrunk_synergy = {}
+    synergy_sample_sizes = {}
+    for pair, g in synergy_games.items():
+        shrunk_synergy[pair] = (synergy_wins[pair] + k_synergy * 0.50) / (g + k_synergy)
+        synergy_sample_sizes[pair] = int(round(g))
 
-    # 6. Train XGBoost Model
-    if X.shape[0] < 5:
-        print("Not enough samples for train_test_split. Need more data to train the model.")
-        sys.exit(0)
+    # Train LightGBM model
+    print("Building LightGBM training matrices...")
+    X_lgb_train = build_lgb_features(train_df, sorted_heroes, hero_to_idx, hero_winrate)
+    X_lgb_val = build_lgb_features(val_df, sorted_heroes, hero_to_idx, hero_winrate)
+    X_lgb_test = build_lgb_features(test_df, sorted_heroes, hero_to_idx, hero_winrate)
 
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    lgb_train_data = lgb.Dataset(X_lgb_train, label=y_train)
+    lgb_val_data = lgb.Dataset(X_lgb_val, label=y_val, reference=lgb_train_data)
 
-    model = XGBClassifier(
-        n_estimators=300, max_depth=6, learning_rate=0.03,
-        subsample=0.85, colsample_bytree=0.85, reg_lambda=2,
-        reg_alpha=0.5, eval_metric='logloss', n_jobs=-1, random_state=42
+    lgb_params = {
+        'objective': 'binary',
+        'metric': 'binary_logloss',
+        'boosting_type': 'gbdt',
+        'learning_rate': 0.03,
+        'num_leaves': 31,
+        'feature_fraction': 0.8,
+        'bagging_fraction': 0.8,
+        'bagging_freq': 1,
+        'min_child_samples': 20,
+        'verbose': -1,
+        'random_state': 42
+    }
+
+    print("Training LightGBM with early stopping...")
+    lgb_model = lgb.train(
+        lgb_params,
+        lgb_train_data,
+        num_boost_round=600,
+        valid_sets=[lgb_val_data],
+        callbacks=[lgb.early_stopping(stopping_rounds=30, verbose=False)]
     )
-    
-    print("Training XGBoost...")
-    model.fit(X_train, y_train)
-    acc = model.score(X_test, y_test)
-    loss = log_loss(y_test, model.predict_proba(X_test))
-    print(f"Accuracy: {acc:.4f}")
-    print(f"LogLoss: {loss:.4f}")
 
-    # 7. Save outputs
-    out_path = Path(args.output_dir)
-    out_path.mkdir(parents=True, exist_ok=True)
-    
-    with open(out_path / "model.pkl", "wb") as f:
-        pickle.dump(model, f)
-    with open(out_path / "hero_map.pkl", "wb") as f:
-        pickle.dump(hero_map, f)
-    with open(out_path / "matchup.pkl", "wb") as f:
-        pickle.dump(matchup_matrix, f)
-    with open(out_path / "synergy.pkl", "wb") as f:
-        pickle.dump(synergy_matrix, f)
-    with open(out_path / "roles.pkl", "wb") as f:
-        pickle.dump(hero_roles, f)
-    with open(out_path / "hero_winrate.pkl", "wb") as f:
-        pickle.dump(hero_winrate, f)
-        
-    print(f"Successfully saved all .pkl artifacts to {out_path}!")
+    lgb_preds_val = lgb_model.predict(X_lgb_val)
+    lgb_preds_test = lgb_model.predict(X_lgb_test)
+
+    # Fit Learned Combiner on Validation Set
+    print("Fitting learned combiner weights on validation slice...")
+    val_comps = extract_score_components(val_df, hero_winrate, global_prior, shrunk_matchup, shrunk_synergy)
+    test_comps = extract_score_components(test_df, hero_winrate, global_prior, shrunk_matchup, shrunk_synergy)
+
+    X_comb_val = np.column_stack([val_comps, lgb_preds_val - 0.5])
+    X_comb_test = np.column_stack([test_comps, lgb_preds_test - 0.5])
+
+    combiner = LogisticRegression(C=1.0, fit_intercept=True, random_state=42)
+    combiner.fit(X_comb_val, y_val)
+
+    comb_weights = {
+        'matchup': float(combiner.coef_[0][0]),
+        'synergy': float(combiner.coef_[0][1]),
+        'winrate': float(combiner.coef_[0][2]),
+        'model': float(combiner.coef_[0][3]),
+        'intercept': float(combiner.intercept_[0]),
+        'k_matchup': float(k_matchup),
+        'k_synergy': float(k_synergy),
+        'recency_lambda': float(recency_lambda),
+    }
+    print(f"Learned Weights: M={comb_weights['matchup']:.4f}, S={comb_weights['synergy']:.4f}, "
+          f"W={comb_weights['winrate']:.4f}, P_model={comb_weights['model']:.4f}, Intercept={comb_weights['intercept']:.4f}")
+
+    # Evaluate Combiner on Test Set
+    comb_preds_test = combiner.predict_proba(X_comb_test)[:, 1]
+    comb_test_acc = accuracy_score(y_test, comb_preds_test >= 0.5)
+    comb_test_loss = log_loss(y_test, comb_preds_test)
+    comb_test_auc = roc_auc_score(y_test, comb_preds_test)
+    comb_test_brier = brier_score_loss(y_test, comb_preds_test)
+
+    print(f"\n--- Learned Combiner Test Performance ---")
+    print(f"Accuracy:   {comb_test_acc * 100:.2f}%")
+    print(f"Log-Loss:   {comb_test_loss:.4f}")
+    print(f"ROC-AUC:    {comb_test_auc:.4f}")
+    print(f"Brier:      {comb_test_brier:.4f}")
+
+    # Save Artifacts
+    out_dir = Path(output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    print(f"\nSaving model artifacts to {out_dir}...")
+
+    with open(out_dir / "model.pkl", "wb") as f: pickle.dump(lgb_model, f)
+    with open(out_dir / "hero_map.pkl", "wb") as f: pickle.dump(hero_map, f)
+    with open(out_dir / "roles.pkl", "wb") as f: pickle.dump(hero_roles, f)
+    with open(out_dir / "hero_winrate.pkl", "wb") as f: pickle.dump(hero_winrate, f)
+    with open(out_dir / "hero_avg_matchup.pkl", "wb") as f: pickle.dump(hero_avg_matchup, f)
+    with open(out_dir / "matchup.pkl", "wb") as f: pickle.dump(shrunk_matchup, f)
+    with open(out_dir / "matchup_samples.pkl", "wb") as f: pickle.dump(matchup_sample_sizes, f)
+    with open(out_dir / "synergy.pkl", "wb") as f: pickle.dump(shrunk_synergy, f)
+    with open(out_dir / "synergy_samples.pkl", "wb") as f: pickle.dump(synergy_sample_sizes, f)
+    with open(out_dir / "combiner_weights.pkl", "wb") as f: pickle.dump(comb_weights, f)
+
+    # Save metadata.json
+    metadata = {
+        "version": "2.1-shrunk-combiner",
+        "trained_at": datetime.datetime.now().isoformat(),
+        "training_matches": len(train_df),
+        "validation_matches": len(val_df),
+        "test_matches": len(test_df),
+        "num_heroes": len(sorted_heroes),
+        "shrinkage": {
+            "k_matchup": k_matchup,
+            "k_synergy": k_synergy,
+            "recency_lambda": recency_lambda
+        },
+        "learned_weights": comb_weights,
+        "test_metrics": {
+            "accuracy": round(float(comb_test_acc), 4),
+            "log_loss": round(float(comb_test_loss), 4),
+            "roc_auc": round(float(comb_test_auc), 4),
+            "brier_score": round(float(comb_test_brier), 4)
+        }
+    }
+    with open(out_dir / "metadata.json", "w") as f:
+        json.dump(metadata, f, indent=2)
+
+    print("Training pipeline finished successfully!")
+    return comb_weights, metadata
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Train Dota 2 Drafter models and learned scoring")
+    parser.add_argument("--input_csv", type=str, default="notebooks/matches.csv", help="Path to matches CSV")
+    default_out = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "backend", "model")
+    parser.add_argument("--output_dir", type=str, default=default_out, help="Output directory for model artifacts")
+    parser.add_argument("--k_matchup", type=float, default=20.0, help="Shrinkage constant for matchup matrix")
+    parser.add_argument("--k_synergy", type=float, default=20.0, help="Shrinkage constant for synergy matrix")
+    parser.add_argument("--recency_lambda", type=float, default=0.2, help="Recency decay rate")
+    args = parser.parse_args()
+
+    train_pipeline(
+        input_csv=args.input_csv,
+        output_dir=args.output_dir,
+        k_matchup=args.k_matchup,
+        k_synergy=args.k_synergy,
+        recency_lambda=args.recency_lambda
+    )
+
 
 if __name__ == "__main__":
     main()

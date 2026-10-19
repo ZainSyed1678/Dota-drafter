@@ -43,11 +43,15 @@ class ReasonDetail(BaseModel):
     how_and_why: str = ""
     key_abilities: list[str] = []
     beginner_tip: str = ""
+    sample_size: int = 0
+    confidence: str = "medium"  # low | medium | high
 
 class HeroSuggestion(BaseModel):
     id:             int
     name:           str
     score:          float
+    confidence:     str = "medium"  # low | medium | high
+    sample_size:    int = 0
     reasons:        list[str] = []
     reason_details: list[ReasonDetail] = []
     roles:          list[str] = []
@@ -55,4 +59,5 @@ class HeroSuggestion(BaseModel):
     overview:       str = ""
 
 class SuggestResponse(BaseModel):
+
     picks: list[HeroSuggestion]

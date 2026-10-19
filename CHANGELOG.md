@@ -31,3 +31,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Fixed
 - **Zero-Leakage Guarantee**: Hero global win rates, matchup matrices, and synergy matrices are calculated strictly using training data only, eliminating target leakage into validation and test sets.
 
+## [Phase 2 — Empirical-Bayes Shrinkage, Confidence & Learned Scoring] - 2026-10-19
+
+### Added
+- `ml_pipeline/reports/ablation.md`: Systematic ablation study across 8 configurations on the unseen test set, establishing that the Full Learned Combiner achieves the highest discriminative ranking power (0.5757 ROC-AUC).
+- `backend/model/matchup_samples.pkl` & `backend/model/synergy_samples.pkl`: Persistent weighted sample sizes per hero pair.
+- `backend/model/combiner_weights.pkl` & `backend/model/metadata.json`: Empirical maximum-likelihood weights and metadata learned from validation slice.
+
+### Changed
+- `ml_pipeline/train.py`:
+  - Upgraded to enforce chronological train/val/test splits without data leakage.
+  - Applied Empirical-Bayes / Beta-prior shrinkage with tuned parameter $k=20.0$ and recency decay $\lambda=0.2$.
+  - Integrated LightGBM model training with early stopping.
+  - Trained Logistic Regression combiner on validation slice to learn optimal component weights ($w_M=1.5644, w_S=1.5201, w_W=0.9665, w_{\text{model}}=2.1890$, intercept $0.1045$).
+- `backend/scoring.py`:
+  - Implemented the learned combiner in `predict()` combining LightGBM $P(\text{win} \mid \dots)$ with shrunk matchup, synergy, and winrate signals.
+  - Implemented confidence rating (`high`, `medium`, `low`) and sample size reporting on all suggestions and reasons.
+  - Suppressed or flagged low-sample ($< 15$ games) counters.
+- `backend/models.py`:
+  - Added `sample_size` and `confidence` fields to `ReasonDetail` and `HeroSuggestion`.
+- `backend/config.py`:
+  - Default `PREDICTION_ENGINE` upgraded to `"combined"`.
+

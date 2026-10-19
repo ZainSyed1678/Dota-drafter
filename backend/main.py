@@ -209,13 +209,15 @@ def suggest(request: Request, req: DraftRequest):
     picks = []
     for hero_id, score in scored[:9]:
         hero_name = scoring.id_to_name[hero_id]
-        reasons, reason_details = scoring.build_reasons_and_details(
+        reasons, reason_details, hero_conf, hero_samples = scoring.build_reasons_and_details(
             hero_id, enemy_ids, req.enemy, ally_ids, req.team
         )
         picks.append(HeroSuggestion(
             id             = hero_id,
             name           = hero_name,
             score          = round(score, 4),
+            confidence     = hero_conf,
+            sample_size    = hero_samples,
             reasons        = reasons,
             reason_details = reason_details,
             roles          = scoring.get_roles(hero_id),

@@ -1,0 +1,29 @@
+{
+  "version": "2.1-shrunk-combiner",
+  "trained_at": "2026-10-19T23:51:43.232470",
+  "training_matches": 10434,
+  "validation_matches": 2236,
+  "test_matches": 2237,
+  "num_heroes": 127,
+  "shrinkage": {
+    "k_matchup": 20.0,
+    "k_synergy": 20.0,
+    "recency_lambda": 0.2
+  },
+  "learned_weights": {
+    "matchup": 1.5643575026093897,
+    "synergy": 1.5201473475166347,
+    "winrate": 0.9665209602217015,
+    "model": 2.1890292391549857,
+    "intercept": 0.1044611926516382,
+    "k_matchup": 20.0,
+    "k_synergy": 20.0,
+    "recency_lambda": 0.2
+  },
+  "test_metrics": {
+    "accuracy": 0.5476,
+    "log_loss": 0.6837,
+    "roc_auc": 0.5757,
+    "brier_score": 0.2454
+  }
+}
