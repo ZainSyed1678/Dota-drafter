@@ -1,5 +1,6 @@
 import os
 import threading
+import time
 
 import requests
 import telebot
@@ -7,10 +8,14 @@ import telebot
 BACKEND_URL = os.environ.get("BACKEND_URL", "http://127.0.0.1:8000")
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
 
-def create_bot(token: str):
-    bot = telebot.TeleBot(token)
+_bot_instance = None
+_lock_socket = None
 
-    @bot.message_handler(commands=['start', 'help'])
+
+def create_bot(token: str):
+    bot = telebot.TeleBot(token, threaded=False)
+
+    @bot.message_handler(commands=["start", "help"])
     def send_welcome(message):
         text = (
             "🗿 *Ugh! Grog Dota Drafter Supervisor Bot!*\n\n"
@@ -25,7 +30,7 @@ def create_bot(token: str):
         )
         bot.reply_to(message, text, parse_mode="Markdown")
 
-    @bot.message_handler(commands=['stats'])
+    @bot.message_handler(commands=["stats"])
     def check_stats(message):
         bot.reply_to(message, "🔍 Grog inspecting system pulse...")
         backend_status = "UNKNOWN"
@@ -74,7 +79,7 @@ def create_bot(token: str):
         )
         bot.reply_to(message, summary, parse_mode="Markdown")
 
-    @bot.message_handler(commands=['health'])
+    @bot.message_handler(commands=["health"])
     def check_health(message):
         bot.reply_to(message, "🏥 Grog pinging all components...")
 
@@ -92,6 +97,7 @@ def create_bot(token: str):
         if DATABASE_URL:
             try:
                 import psycopg2
+
                 conn = psycopg2.connect(DATABASE_URL, connect_timeout=10)
                 with conn.cursor() as cur:
                     cur.execute("SELECT COUNT(*) FROM matches;")
@@ -111,7 +117,7 @@ def create_bot(token: str):
         )
         bot.reply_to(message, report, parse_mode="Markdown")
 
-    @bot.message_handler(commands=['model_stats'])
+    @bot.message_handler(commands=["model_stats"])
     def check_model_stats(message):
         try:
             resp = requests.get(f"{BACKEND_URL}/model/status", timeout=4)
@@ -132,7 +138,8 @@ def create_bot(token: str):
                     f"• *Status:* `{status}`\n"
                     f"• *Last Loaded:* `{loaded}`\n\n"
                     "*Model Artifacts:*\n"
-                    + ("\n".join(file_lines) if file_lines else "• None found") + "\n"
+                    + ("\n".join(file_lines) if file_lines else "• None found")
+                    + "\n"
                     "━━━━━━━━━━━━━━━━━━━━━\n"
                     "💡 Use `/deploy` to hot-reload models!"
                 )
@@ -142,26 +149,32 @@ def create_bot(token: str):
         except Exception as e:
             bot.reply_to(message, f"❌ Could not reach Backend: {e}")
 
-    @bot.message_handler(commands=['deploy'])
+    @bot.message_handler(commands=["deploy"])
     def deploy_models(message):
         bot.reply_to(message, "🔄 Grog telling backend to hot-reload models...")
         try:
             resp = requests.post(f"{BACKEND_URL}/model/reload", timeout=10)
             if resp.status_code == 200:
-                bot.reply_to(message, "✅ *SUCCESS!* Backend swapped rocks safely without downtime!", parse_mode="Markdown")
+                bot.reply_to(
+                    message, "✅ *SUCCESS!* Backend swapped rocks safely without downtime!", parse_mode="Markdown"
+                )
             else:
                 bot.reply_to(message, f"❌ Backend yelled: {resp.status_code}", parse_mode="Markdown")
         except Exception as e:
             bot.reply_to(message, f"❌ Failed to reach backend: {e}")
 
-    @bot.message_handler(commands=['suggest'])
+    @bot.message_handler(commands=["suggest"])
     def suggest_picks(message):
-        args = message.text.replace('/suggest', '').strip()
+        args = message.text.replace("/suggest", "").strip()
         if not args:
-            bot.reply_to(message, "Ugh! Tell Grog enemy heroes separated by commas! Example:\n`/suggest Pudge, Sniper`", parse_mode="Markdown")
+            bot.reply_to(
+                message,
+                "Ugh! Tell Grog enemy heroes separated by commas! Example:\n`/suggest Pudge, Sniper`",
+                parse_mode="Markdown",
+            )
             return
 
-        enemy_names = [x.strip() for x in args.split(',') if x.strip()]
+        enemy_names = [x.strip() for x in args.split(",") if x.strip()]
         try:
             resp = requests.post(f"{BACKEND_URL}/suggest", json={"team": [], "enemy": enemy_names}, timeout=5)
             if resp.status_code == 200:
@@ -172,7 +185,8 @@ def create_bot(token: str):
                 text = (
                     f"⚔️ *Top Counters Against {', '.join(enemy_names)}:*\n"
                     "━━━━━━━━━━━━━━━━━━━━━\n"
-                    + "\n".join(lines) + "\n"
+                    + "\n".join(lines)
+                    + "\n"
                     "━━━━━━━━━━━━━━━━━━━━━"
                 )
                 bot.reply_to(message, text, parse_mode="Markdown")
@@ -183,11 +197,37 @@ def create_bot(token: str):
 
     return bot
 
-_lock_socket = None
+
+def get_or_create_bot(token: str):
+    global _bot_instance
+    if _bot_instance is None:
+        _bot_instance = create_bot(token)
+    return _bot_instance
+
+
+async def process_telegram_webhook(request):
+    global _bot_instance
+    if not _bot_instance:
+        token = os.environ.get("TELEGRAM_TOKEN")
+        if token:
+            _bot_instance = create_bot(token)
+        else:
+            return {"status": "error", "message": "TELEGRAM_TOKEN not configured"}
+    try:
+        data = await request.json()
+        update = telebot.types.Update.de_json(data)
+        if update:
+            _bot_instance.process_new_updates([update])
+        return {"status": "ok"}
+    except Exception as e:
+        print(f"Error processing telegram webhook: {e}")
+        return {"status": "error", "message": str(e)}
+
 
 def acquire_bot_lock() -> bool:
     global _lock_socket
     import socket
+
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.bind(("127.0.0.1", 9999))
@@ -196,34 +236,59 @@ def acquire_bot_lock() -> bool:
     except OSError:
         return False
 
-def start_bot_thread(token: str):
+
+def start_bot_service(token: str):
+    """
+    Starts the bot via Webhook if a public URL (like Render) is present,
+    or falls back to controlled polling for local development.
+    """
+    bot = get_or_create_bot(token)
+    public_url = os.environ.get("RENDER_EXTERNAL_URL") or os.environ.get("WEBHOOK_URL")
+
+    if public_url:
+        webhook_url = f"{public_url.rstrip('/')}/telegram/webhook"
+        try:
+            bot.remove_webhook()
+            bot.set_webhook(url=webhook_url, drop_pending_updates=True)
+            print(f"Telegram Bot enabled via Webhook on {webhook_url} (409 polling conflicts permanently avoided)")
+            return None
+        except Exception as e:
+            print(f"Failed to set webhook on {webhook_url}: {e}. Falling back to polling.")
+
+    # Local fallback: Polling with lock and 409 conflict backoff
     if not acquire_bot_lock():
-        print("Another worker process already holds the Telegram bot lock. Skipping duplicate bot.")
+        print("Another worker holds the bot lock. Skipping duplicate polling thread.")
         return None
 
-    import time
-    bot = create_bot(token)
-
-    def _runner():
-        print("Telegram Supervisor Bot starting resilient polling...")
+    def _polling_runner():
+        print("Telegram Supervisor Bot starting local fallback polling...")
         try:
             bot.remove_webhook()
         except Exception:
             pass
 
+        last_offset = 0
         while True:
             try:
-                bot.infinity_polling(skip_pending=True, timeout=20, long_polling_timeout=20)
-            except Exception as e:
-                err_str = str(e)
-                if "409" in err_str or "Conflict" in err_str:
-                    print("Telegram Bot 409 Conflict: another instance is running. Backing off for 60s...")
+                updates = bot.get_updates(offset=last_offset, timeout=20)
+                if updates:
+                    bot.process_new_updates(updates)
+                    last_offset = updates[-1].update_id + 1
+            except telebot.apihelper.ApiTelegramException as e:
+                if e.error_code == 409:
+                    print("Telegram Bot 409 Conflict: another instance is active. Sleeping 60s...")
                     time.sleep(60)
-                    continue
+                else:
+                    print(f"Telegram Bot polling error (will retry in 5s): {e}")
+                    time.sleep(5)
+            except Exception as e:
                 print(f"Telegram Bot polling error (will retry in 5s): {e}")
                 time.sleep(5)
 
-    t = threading.Thread(target=_runner, daemon=True)
+    t = threading.Thread(target=_polling_runner, daemon=True)
     t.start()
     return t
 
+
+def start_bot_thread(token: str):
+    return start_bot_service(token)

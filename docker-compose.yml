@@ -92,20 +92,6 @@ services:
     networks:
       - dota_net
 
-  supervisor_bot:
-    build:
-      context: ./bot
-      dockerfile: Dockerfile
-    container_name: dota_supervisor_bot
-    restart: unless-stopped
-    environment:
-      - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
-      - BACKEND_URL=http://backend:8000
-      - PROMETHEUS_URL=http://prometheus:9090
-      - QDRANT_URL=http://qdrant:6333
-    networks:
-      - dota_net
-
 networks:
   dota_net:
     driver: bridge

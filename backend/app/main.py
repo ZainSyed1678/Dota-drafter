@@ -174,3 +174,10 @@ def startup_event():
 app.include_router(health_router)
 app.include_router(heroes_router)
 app.include_router(draft_router)
+
+
+@app.post("/telegram/webhook", include_in_schema=False)
+async def telegram_webhook(request: Request):
+    from bot_service import process_telegram_webhook
+    return await process_telegram_webhook(request)
+
