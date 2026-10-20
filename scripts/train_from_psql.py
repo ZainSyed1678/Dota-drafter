@@ -1,5 +1,7 @@
 import argparse
+import datetime
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -12,91 +14,125 @@ try:
     load_dotenv()
 except ImportError:
     pass
+
 scripts_dir = Path(__file__).resolve().parent
 if str(scripts_dir) not in sys.path:
     sys.path.insert(0, str(scripts_dir))
-import lifecycle_manager
 
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--patch", type=str, required=True, help="Patch version (e.g. 7.35d)")
-    parser.add_argument("--dataset", type=str, required=True, help="Dataset version (e.g. v1)")
-    parser.add_argument("--feature", type=str, default="v1", help="Feature version (e.g. v1)")
-    parser.add_argument("--max-samples", type=int, default=50000, help="Max matches to use for training")
-    args = parser.parse_args()
+def train_from_postgres(patch: str = "7.35d", max_samples: int = 50000, version: str = None) -> bool:
+    if not version:
+        date_str = datetime.datetime.now().strftime("%Y.%m.%d")
+        version = f"v{date_str}"
 
-    print(f"Grog start train process for Patch {args.patch}, Dataset {args.dataset}, Feature {args.feature}!")
+    print(f"Starting PostgreSQL training extraction for Patch {patch} (Max: {max_samples}, Version: {version})...")
 
-    db_url = os.environ.get("DATABASE_URL", "postgresql://dotauser:dotapassword@localhost:5432/dotadb")
+    db_url = os.environ.get("DATABASE_URL")
+    if not db_url:
+        print("DATABASE_URL environment variable is not set. Cannot pull from PostgreSQL.")
+        return False
 
-    # Init lifecycle just in case
-    lifecycle_manager.init_lifecycle_db()
+    try:
+        conn = psycopg2.connect(db_url, connect_timeout=15)
+    except Exception as e:
+        print(f"Could not connect to PostgreSQL: {e}")
+        return False
 
-    # Verify dataset exists and get boundary
-    ds_info = lifecycle_manager.get_dataset_info(args.patch, args.dataset)
-    if not ds_info:
-        print(f"Ugh! Grog cannot find dataset {args.dataset} for patch {args.patch}!")
-        return
+    # Check match counts for patch or fallback to all high-MMR matches
+    with conn.cursor() as cur:
+        cur.execute("SELECT COUNT(*) FROM matches WHERE patch_version = %s;", (patch,))
+        patch_count = cur.fetchone()[0]
 
-    if not ds_info['is_ready']:
-        print(f"Ugh! Dataset {args.dataset} is NOT ready!")
-        return
+        if patch_count < 1000:
+            print(f"Only {patch_count} matches found for patch '{patch}'. Checking total available matches...")
+            cur.execute("SELECT COUNT(*) FROM matches;")
+            total_matches = cur.fetchone()[0]
+            print(f"Total matches in DB: {total_matches}")
+            where_clause = ""
+            query_limit = min(total_matches, max_samples)
+        else:
+            where_clause = f"WHERE patch_version = '{patch}'"
+            query_limit = min(patch_count, max_samples)
 
-    total_available = ds_info['match_count']
-    limit = min(total_available, args.max_samples)
-    ds_info['id']
+    if query_limit == 0:
+        print("No matches found in database. Please run collection first.")
+        conn.close()
+        return False
 
-    # Register feature version
-    lifecycle_manager.register_feature(args.patch, args.feature)
-
-    print(f"Grog downloading {limit} matches (out of {total_available} total in Neon) for training...")
-    conn = psycopg2.connect(db_url, connect_timeout=15)
-
-    # Reproducible query!
+    print(f"Extracting {query_limit} most recent matches from PostgreSQL...")
     query = f"""
-        SELECT * FROM matches
-        WHERE patch_version = '{args.patch}'
-        ORDER BY match_id ASC
-        LIMIT {limit}
+        SELECT match_id, radiant_win, radiant_team, dire_team
+        FROM (
+            SELECT match_id, radiant_win, radiant_team, dire_team
+            FROM matches
+            {where_clause}
+            ORDER BY match_id DESC
+            LIMIT {query_limit}
+        ) recent_matches
+        ORDER BY match_id ASC;
     """
     df = pd.read_sql(query, conn)
     conn.close()
 
-    if len(df) < limit:
-        print(f"Warning: Only found {len(df)} matches, but expected {limit}!")
+    print(f"Extracted {len(df)} matches successfully.")
 
-    # Notebook expects matches.csv in the same directory it runs
-    # To keep notebook working without rewrite, we still save it as matches.csv
-    # But we can ALSO save a backup copy with the versioned name for tracking.
-    csv_dir = Path("notebooks")
-    versioned_csv = csv_dir / f"matches_{args.patch}_{args.dataset}.csv"
-    active_csv = csv_dir / "matches.csv"
+    data_dir = Path("data")
+    data_dir.mkdir(parents=True, exist_ok=True)
+    temp_csv = data_dir / f"matches_{patch}_{version}.csv"
+    df.to_csv(temp_csv, index=False)
 
-    df.to_csv(versioned_csv, index=False)
-
-    # Overwrite the active one for the notebook
-    import shutil
-    shutil.copy(versioned_csv, active_csv)
-
-    print(f"Grog save reproducible dataset to {versioned_csv} and symlinked to {active_csv}")
-
-    # Call production pipeline script
-    print("Grog run production Python script to train model...")
+    print(f"Executing ML pipeline training (version={version})...")
+    backend_model_dir = Path("backend") / "model"
     cmd = [
         sys.executable, "ml_pipeline/train.py",
-        "--input_csv", str(versioned_csv)
+        "--input_csv", str(temp_csv),
+        "--output_dir", str(backend_model_dir),
+        "--version", version
     ]
 
     result = subprocess.run(cmd, capture_output=True, text=True, cwd=".")
 
     if result.returncode != 0:
-        print("Ugh! Train failed!")
+        print("ML Pipeline training failed!")
         print(result.stderr)
-    else:
-        print(f"Train SUCCESS! Rock learned on {args.patch} {args.dataset}!")
-        print("Model output:")
-        print("\n".join(result.stdout.split("\n")[-10:]))
+        return False
+
+    print(f"Model training SUCCESS for version {version}!")
+    print("\n".join(result.stdout.split("\n")[-10:]))
+
+    # Sync to root model directory for Docker Compose mounts
+    root_model_dir = Path("model")
+    if root_model_dir.exists():
+        version_dir = backend_model_dir / version
+        if version_dir.exists():
+            shutil.copytree(version_dir, root_model_dir / version, dirs_exist_ok=True)
+        for fname in ["model.pkl", "matchup.pkl", "synergy.pkl", "roles.pkl", "hero_winrate.pkl",
+                      "hero_avg_matchup.pkl", "combiner_weights.pkl", "matchup_samples.pkl",
+                      "synergy_samples.pkl", "metadata.json"]:
+            src = backend_model_dir / fname
+            if src.exists():
+                shutil.copy2(src, root_model_dir / fname)
+
+    # Clean up temporary query CSV to preserve space
+    try:
+        temp_csv.unlink()
+    except Exception:
+        pass
+
+    return True
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Train Dota 2 Drafter model from PostgreSQL")
+    parser.add_argument("--patch", type=str, default="7.35d", help="Patch version (e.g. 7.35d)")
+    parser.add_argument("--max-samples", type=int, default=50000, help="Max matches to use for training")
+    parser.add_argument("--version", type=str, default=None, help="Version string for model (e.g. v2.3.0)")
+    args = parser.parse_args()
+
+    success = train_from_postgres(patch=args.patch, max_samples=args.max_samples, version=args.version)
+    if not success:
+        sys.exit(1)
+
 
 if __name__ == "__main__":
     main()
