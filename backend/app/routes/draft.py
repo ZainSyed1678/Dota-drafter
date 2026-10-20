@@ -1,10 +1,12 @@
 from fastapi import APIRouter, HTTPException, Request, Response
-from app.config import settings
-from app.logger import get_logger
-from app.schemas import DraftRequest, SuggestResponse, HeroSuggestion
-from app.model_loader import store
-from app.cache import draft_cache
+
 import app.scoring as scoring
+from app.cache import draft_cache
+from app.config import settings
+from app.hero_knowledge import get_hero_difficulty, get_hero_overview
+from app.logger import get_logger
+from app.model_loader import store
+from app.schemas import DraftRequest, HeroSuggestion, SuggestResponse
 
 router = APIRouter(tags=["draft"])
 log = get_logger("dota-api.draft")
@@ -97,8 +99,8 @@ def suggest(request: Request, req: DraftRequest, response: Response):
             reasons=reasons,
             reason_details=reason_details,
             roles=scoring.get_roles(hero_id),
-            difficulty=scoring.get_hero_difficulty(hero_name),
-            overview=scoring.get_hero_overview(hero_name),
+            difficulty=get_hero_difficulty(hero_name),
+            overview=get_hero_overview(hero_name),
         ))
 
     result = SuggestResponse(

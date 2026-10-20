@@ -1,10 +1,11 @@
-import requests
-import time
-import os
 import argparse
+import os
+import time
+
 import psycopg2
+import requests
+from prometheus_client import Counter, start_http_server
 from psycopg2.extras import execute_values
-from prometheus_client import start_http_server, Counter
 
 BATCH_SIZE = 100
 API_DELAY = 1.0
@@ -21,7 +22,7 @@ def get_hero_map():
         API_REQUESTS.inc()
         resp = requests.get("https://api.opendota.com/api/heroes")
         return {h['id']: h['localized_name'] for h in resp.json()}
-    except Exception as e:
+    except Exception:
         API_ERRORS.inc()
         return {}
 
@@ -78,7 +79,7 @@ def main():
     conn = psycopg2.connect(db_url)
     init_db(conn)
 
-    hero_map = get_hero_map()
+    get_hero_map()
     print("Grog load hero map.")
 
     matches_collected = 0
@@ -122,7 +123,7 @@ def main():
 
         time.sleep(API_DELAY)
 
-    print(f"\nDone! Grog save matches to PSQL.")
+    print("\nDone! Grog save matches to PSQL.")
     # Keep alive for Prometheus scraping if needed
     print("Grog sleep for 60 seconds so Prometheus can scrape final stats...")
     time.sleep(60)

@@ -304,11 +304,11 @@ def explain_counter(hero: str, enemy: str, wr_delta: float) -> dict:
             "key_abilities": spec["abilities"],
             "beginner_tip": spec["tip"]
         }
-    
+
     # Generic intelligent fallback using tags
     h_tags = HERO_TAGS.get(hero, [])
     e_tags = HERO_TAGS.get(enemy, [])
-    
+
     how = f"{hero} holds a favorable matchup against {enemy} ({wr_delta:+.1%} winrate advantage in high-MMR drafts)."
     abilities = []
     tip = f"Play around your team's initiation and prioritize shutting down {enemy} in skirmishes."
@@ -327,7 +327,7 @@ def explain_counter(hero: str, enemy: str, wr_delta: float) -> dict:
         tip = f"Target {enemy} in the backline before they can free-hit your teammates."
     elif "armor_reduction" in h_tags:
         how = f"{hero} strips {enemy}'s armor, allowing allied physical damage to burst them down much faster."
-        tip = f"Apply your armor reduction debuffs first before your physical carry commits."
+        tip = "Apply your armor reduction debuffs first before your physical carry commits."
     elif "passive_break" in h_tags:
         how = f"{hero} breaks {enemy}'s strong passive abilities, severely weakening their defensive and offensive stats."
         tip = f"Ensure {enemy} is afflicted with Break before dumping high-damage abilities into them."
@@ -354,11 +354,11 @@ def explain_synergy(hero: str, ally: str, wr_delta: float) -> dict:
             "key_abilities": spec["abilities"],
             "beginner_tip": spec["tip"]
         }
-    
+
     # Generic intelligent fallback
     h_tags = HERO_TAGS.get(hero, [])
     a_tags = HERO_TAGS.get(ally, [])
-    
+
     how = f"{hero} forms an effective combination with {ally}, boosting team win probability by {wr_delta:+.1%}."
     abilities = []
     tip = f"Coordinate spell timings and target focus together with {ally} during lane and teamfights."

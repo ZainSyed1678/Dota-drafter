@@ -1,0 +1,22 @@
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = [
+    "E501",  # line too long
+    "E701",  # multiple statements on one line (colon)
+    "E702",  # multiple statements on one line (semicolon)
+    "E722",  # do not use bare except
+    "F403",  # star imports
+    "F405",  # name may be undefined from star import
+    "E402",  # module level import not at top of file
+]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+warn_unused_ignores = false
+disallow_untyped_defs = false
+check_untyped_defs = false

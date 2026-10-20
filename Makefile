@@ -1,27 +1,42 @@
-# Dota Drafter - Local Development Commands
+.PHONY: help data train eval test lint up down clean
 
-.PHONY: help collect validate retrain status rollback
+PYTHON ?= python
 
-help:  ## Show this help
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
+help:  ## Show this help message
+	@echo "Dota Drafter - Development & Pipeline Commands"
+	@echo ""
+	@echo "Usage: make [target]"
+	@echo ""
+	@echo "Targets:"
+	@echo "  data     Clean raw match dataset and prepare 5v5 records"
+	@echo "  train    Train LightGBM model, shrink matrices, and fit combiner"
+	@echo "  eval     Evaluate models with strict time-based splits (no leakage)"
+	@echo "  test     Run pytest test suite on unit, leakage, and API tests"
+	@echo "  lint     Run ruff linter on backend, ml_pipeline, and tests"
+	@echo "  up       Build and run local services via Docker Compose"
+	@echo "  down     Stop Docker Compose containers"
+	@echo "  clean    Remove Python and build caches"
 
-collect:  ## Collect matches from OpenDota API
-	cd fetch && python fetch.py --target 50000 --output ../data/matches.csv
+data:  ## Clean and prepare match dataset
+	$(PYTHON) ml_pipeline/prepare_data.py --input tests/fixtures/matches_fixture.csv --output data/clean_matches.csv
 
-validate:  ## Validate collected data
-	cd fetch && python validator.py ../data/matches.csv
+train:  ## Train model pipeline with shrinkage and stacking
+	$(PYTHON) ml_pipeline/train.py --input_csv tests/fixtures/matches_fixture.csv --output_dir backend/model --version v2.2.0
 
-retrain:  ## Force retrain the model
-	cd fetch && python scheduler.py --retrain
+eval:  ## Evaluate model baselines on temporal splits
+	$(PYTHON) ml_pipeline/evaluate.py --csv tests/fixtures/matches_fixture.csv --reports_dir ml_pipeline/reports
 
-status:  ## Show pipeline status
-	cd fetch && python scheduler.py --status
+test:  ## Run comprehensive pytest test suite
+	pytest tests/
 
-rollback:  ## Rollback to previous model version
-	cd fetch && python scheduler.py --rollback
+lint:  ## Run ruff linter
+	ruff check backend ml_pipeline tests scripts
 
-check-patch:  ## Check for Dota 2 patch updates
-	cd fetch && python scheduler.py --check-patch
+up:  ## Build and start full stack with docker compose
+	docker compose up --build
 
-pipeline:  ## Run full pipeline (check + collect + validate + retrain if needed)
-	cd fetch && python scheduler.py --target 50000
+down:  ## Stop docker compose stack
+	docker compose down
+
+clean:  ## Clean temporary cache files
+	rm -rf .pytest_cache .ruff_cache htmlcov **/__pycache__

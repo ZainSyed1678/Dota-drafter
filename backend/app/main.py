@@ -1,13 +1,15 @@
 import time
 from datetime import datetime
-from fastapi import FastAPI, Request, Response, status, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
+
+from fastapi import FastAPI, HTTPException, Request, Response, status
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+
 try:
     from slowapi import Limiter, _rate_limit_exceeded_handler
-    from slowapi.util import get_remote_address
     from slowapi.errors import RateLimitExceeded
+    from slowapi.util import get_remote_address
     has_limiter = True
 except ImportError:
     class DummyLimiter:
@@ -18,17 +20,18 @@ except ImportError:
     Limiter = DummyLimiter
     _rate_limit_exceeded_handler = None
     RateLimitExceeded = Exception
-    get_remote_address = lambda req: "127.0.0.1"
+    def get_remote_address(req):
+        return "127.0.0.1"
     has_limiter = False
 
-from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST
+from prometheus_client import CONTENT_TYPE_LATEST, Counter, Gauge, Histogram, generate_latest
 
 from app.config import settings
 from app.logger import get_logger
 from app.model_loader import store
 from app.routes.draft import router as draft_router
-from app.routes.heroes import router as heroes_router
 from app.routes.health import router as health_router
+from app.routes.heroes import router as heroes_router
 
 log = get_logger("dota-api.main")
 
@@ -102,7 +105,7 @@ async def security_and_telemetry_middleware(request: Request, call_next):
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     errors = []
     for err in exc.errors():
-        loc = " -> ".join([str(l) for l in err.get("loc", []) if l != "body"])
+        loc = " -> ".join([str(part) for part in err.get("loc", []) if part != "body"])
         msg = err.get("msg", "Validation error")
         errors.append(f"{loc}: {msg}" if loc else msg)
     return JSONResponse(

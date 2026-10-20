@@ -1,5 +1,6 @@
 import os
 import threading
+
 import requests
 import telebot
 
@@ -29,8 +30,7 @@ def create_bot(token: str):
         bot.reply_to(message, "🔍 Grog inspecting system pulse...")
         backend_status = "UNKNOWN"
         heroes_count = "N/A"
-        engine_str = "Heuristics"
-        
+
         # Check health
         try:
             r = requests.get(f"{BACKEND_URL}/health", timeout=3)
@@ -77,7 +77,7 @@ def create_bot(token: str):
     @bot.message_handler(commands=['health'])
     def check_health(message):
         bot.reply_to(message, "🏥 Grog pinging all components...")
-        
+
         # 1. Backend
         api_status = "🔴 DOWN"
         try:
@@ -120,12 +120,12 @@ def create_bot(token: str):
                 status = data.get("status", "unknown")
                 loaded = data.get("loaded_at", "never")
                 files = data.get("files", {})
-                
+
                 file_lines = []
                 for name, meta in files.items():
                     size_kb = meta.get("size_bytes", 0) / 1024
                     file_lines.append(f"• `{name}`: {size_kb:.1f} KB")
-                    
+
                 text = (
                     "🧠 *Model Registry Metadata*\n"
                     "━━━━━━━━━━━━━━━━━━━━━\n"
@@ -160,7 +160,7 @@ def create_bot(token: str):
         if not args:
             bot.reply_to(message, "Ugh! Tell Grog enemy heroes separated by commas! Example:\n`/suggest Pudge, Sniper`", parse_mode="Markdown")
             return
-            
+
         enemy_names = [x.strip() for x in args.split(',') if x.strip()]
         try:
             resp = requests.post(f"{BACKEND_URL}/suggest", json={"team": [], "enemy": enemy_names}, timeout=5)

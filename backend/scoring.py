@@ -1,17 +1,15 @@
-import os
 import json
+import os
 import pickle
-from typing import Dict, Tuple, List, Any, Optional
-import numpy as np
+from typing import Any, Dict, List, Optional, Tuple
 
-from logger import get_logger
+import numpy as np
 from config import settings
 from hero_knowledge import (
-    get_hero_difficulty,
-    get_hero_overview,
     explain_counter,
     explain_synergy,
 )
+from logger import get_logger
 
 log = get_logger("dota-api.scoring")
 

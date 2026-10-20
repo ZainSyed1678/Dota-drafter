@@ -9,24 +9,22 @@ Computes ALL hero win rates, matchup matrices, and synergy matrices
 STRICTLY on the training set to prevent any data leakage.
 """
 
-import os
-import sys
-import json
-import ast
 import argparse
-from pathlib import Path
+import ast
+import json
 from collections import Counter
+from pathlib import Path
 
+import matplotlib
 import numpy as np
 import pandas as pd
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
 
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score, log_loss, roc_auc_score, brier_score_loss
-from sklearn.calibration import calibration_curve
+matplotlib.use('Agg')
 import lightgbm as lgb
+import matplotlib.pyplot as plt
+from sklearn.calibration import calibration_curve
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score, brier_score_loss, log_loss, roc_auc_score
 
 
 def clean_team(x):
@@ -175,7 +173,7 @@ def build_feature_vectors(df: pd.DataFrame, stats: dict):
     hero_winrate = stats["hero_winrate"]
     matchup_matrix = stats["matchup_matrix"]
     synergy_matrix = stats["synergy_matrix"]
-    global_radiant_wr = stats["global_radiant_wr"]
+    stats["global_radiant_wr"]
 
     X_list = []
     wr_diff_list = []

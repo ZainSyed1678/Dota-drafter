@@ -1,8 +1,13 @@
 import os
-import time
 import subprocess
-import requests
 import sys
+from pathlib import Path
+
+import requests
+
+scripts_dir = Path(__file__).resolve().parent
+if str(scripts_dir) not in sys.path:
+    sys.path.insert(0, str(scripts_dir))
 import lifecycle_manager
 
 try:
@@ -15,25 +20,25 @@ BACKEND_URL = os.environ.get("BACKEND_URL", "https://dota-drafter-api.onrender.c
 
 def run_training(patch: str, dataset_version: str = "v1") -> bool:
     print(f"Orchestrator telling Grog to train for Patch {patch}, Dataset {dataset_version}...")
-    
+
     cmd = [
-        sys.executable, "train_from_psql.py",
+        sys.executable, str(scripts_dir / "train_from_psql.py"),
         "--patch", patch,
         "--dataset", dataset_version
     ]
-    
+
     result = subprocess.run(cmd, capture_output=True, text=True)
-    
+
     if result.returncode != 0:
         print(f"Ugh! Training failed for {patch}!")
         print(result.stderr)
         return False
-        
+
     print(f"Training success for {patch}!")
     return True
 
 def deploy_models(patch: str) -> bool:
-    print(f"Orchestrator telling Backend to Hot-Reload new models...")
+    print("Orchestrator telling Backend to Hot-Reload new models...")
     try:
         resp = requests.post(f"{BACKEND_URL}/model/reload")
         if resp.status_code == 200:
@@ -48,29 +53,29 @@ def deploy_models(patch: str) -> bool:
 
 def main():
     print("Grog Orchestrator waking up!")
-    
+
     # Check for patches ready to train
     ready_patches = lifecycle_manager.get_patches_in_state("DATA_READINESS_CHECK")
-    
+
     if not ready_patches:
         print("No patches ready for training. Grog go back to sleep.")
         return
-        
+
     for patch in ready_patches:
         print(f"\n--- Processing Patch {patch} ---")
-        
+
         # 1. Train
         lifecycle_manager.transition_state(patch, "TRAINING")
         success = run_training(patch)
-        
+
         if not success:
             lifecycle_manager.transition_state(patch, "TRAINING_FAILED")
             continue
-            
+
         # 2. Deploy
         lifecycle_manager.transition_state(patch, "DEPLOYING")
         deploy_success = deploy_models(patch)
-        
+
         if deploy_success:
             lifecycle_manager.transition_state(patch, "DEPLOYED")
             print(f"SUCCESS: Patch {patch} is now fully trained and DEPLOYED in production!")

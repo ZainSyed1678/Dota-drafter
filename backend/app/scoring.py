@@ -1,15 +1,14 @@
-from typing import List, Tuple, Any
+from typing import Any, List, Tuple
+
 import numpy as np
 
 from app.config import settings
-from app.logger import get_logger
-from app.model_loader import store
 from app.hero_knowledge import (
-    get_hero_difficulty,
-    get_hero_overview,
     explain_counter,
     explain_synergy,
 )
+from app.logger import get_logger
+from app.model_loader import store
 
 log = get_logger("dota-api.scoring")
 

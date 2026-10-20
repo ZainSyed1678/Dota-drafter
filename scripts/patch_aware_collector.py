@@ -1,15 +1,23 @@
-import requests
-import time
-import os
 import argparse
+import os
+import sys
+import time
+
 import psycopg2
+import requests
+from prometheus_client import Counter, start_http_server
 from psycopg2.extras import execute_values
-from prometheus_client import start_http_server, Counter
+
 try:
     from dotenv import load_dotenv
     load_dotenv()
 except ImportError:
     pass
+from pathlib import Path
+
+scripts_dir = Path(__file__).resolve().parent
+if str(scripts_dir) not in sys.path:
+    sys.path.insert(0, str(scripts_dir))
 import lifecycle_manager
 
 BATCH_SIZE = 100
@@ -80,7 +88,7 @@ def main():
 
     # Ensure DB is set up for lifecycle and collector
     lifecycle_manager.init_lifecycle_db()
-    
+
     db_url = os.environ.get("DATABASE_URL", "postgresql://dotauser:dotapassword@localhost:5432/dotadb")
     conn = psycopg2.connect(db_url, connect_timeout=15)
     init_tables(conn)
@@ -93,7 +101,7 @@ def main():
     run_id = None
     with conn.cursor() as cur:
         cur.execute("""
-            INSERT INTO collection_runs (patch_version, status) 
+            INSERT INTO collection_runs (patch_version, status)
             VALUES (%s, %s) RETURNING id
         """, (args.patch, "RUNNING"))
         run_id = cur.fetchone()[0]
@@ -123,11 +131,11 @@ def main():
 
                 r_team = match['radiant_team']
                 d_team = match['dire_team']
-                
+
                 # Must be 5v5
                 r_team_ids = [int(x) for x in r_team.split(',')] if isinstance(r_team, str) else r_team
                 d_team_ids = [int(x) for x in d_team.split(',')] if isinstance(d_team, str) else d_team
-                
+
                 if len(r_team_ids) != 5 or len(d_team_ids) != 5:
                     VALIDATION_FAILURES.inc()
                     continue
@@ -152,12 +160,12 @@ def main():
                 added = len(processed_batch)
                 MATCHES_COLLECTED.labels(patch=args.patch).inc(added)
                 matches_collected += added
-                
+
                 # Update run stats
                 with conn.cursor() as cur:
                     cur.execute("""
-                        UPDATE collection_runs 
-                        SET matches_fetched = %s, matches_inserted = %s 
+                        UPDATE collection_runs
+                        SET matches_fetched = %s, matches_inserted = %s
                         WHERE id = %s
                     """, (total_fetched, matches_collected, run_id))
                 conn.commit()
@@ -186,7 +194,7 @@ def main():
             lifecycle_manager.transition_state(args.patch, "DATA_READINESS_CHECK")
         else:
             print(f"Current patch matches: {total_patch_matches}/{args.target}. Remaining active in COLLECTION_ACTIVE.")
-        
+
     except Exception as e:
         # 5. Failure Tracking
         print(f"CRITICAL ERROR: {e}")

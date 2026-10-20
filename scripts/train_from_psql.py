@@ -1,16 +1,22 @@
+import argparse
 import os
-import psycopg2
-import pandas as pd
 import subprocess
 import sys
-import argparse
 from pathlib import Path
+
+import pandas as pd
+import psycopg2
+
 try:
     from dotenv import load_dotenv
     load_dotenv()
 except ImportError:
     pass
+scripts_dir = Path(__file__).resolve().parent
+if str(scripts_dir) not in sys.path:
+    sys.path.insert(0, str(scripts_dir))
 import lifecycle_manager
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -21,9 +27,9 @@ def main():
     args = parser.parse_args()
 
     print(f"Grog start train process for Patch {args.patch}, Dataset {args.dataset}, Feature {args.feature}!")
-    
+
     db_url = os.environ.get("DATABASE_URL", "postgresql://dotauser:dotapassword@localhost:5432/dotadb")
-    
+
     # Init lifecycle just in case
     lifecycle_manager.init_lifecycle_db()
 
@@ -39,51 +45,51 @@ def main():
 
     total_available = ds_info['match_count']
     limit = min(total_available, args.max_samples)
-    ds_id = ds_info['id']
+    ds_info['id']
 
     # Register feature version
     lifecycle_manager.register_feature(args.patch, args.feature)
-        
+
     print(f"Grog downloading {limit} matches (out of {total_available} total in Neon) for training...")
     conn = psycopg2.connect(db_url, connect_timeout=15)
-    
+
     # Reproducible query!
     query = f"""
-        SELECT * FROM matches 
-        WHERE patch_version = '{args.patch}' 
-        ORDER BY match_id ASC 
+        SELECT * FROM matches
+        WHERE patch_version = '{args.patch}'
+        ORDER BY match_id ASC
         LIMIT {limit}
     """
     df = pd.read_sql(query, conn)
     conn.close()
-    
+
     if len(df) < limit:
         print(f"Warning: Only found {len(df)} matches, but expected {limit}!")
-        
+
     # Notebook expects matches.csv in the same directory it runs
     # To keep notebook working without rewrite, we still save it as matches.csv
     # But we can ALSO save a backup copy with the versioned name for tracking.
     csv_dir = Path("notebooks")
     versioned_csv = csv_dir / f"matches_{args.patch}_{args.dataset}.csv"
     active_csv = csv_dir / "matches.csv"
-    
+
     df.to_csv(versioned_csv, index=False)
-    
+
     # Overwrite the active one for the notebook
     import shutil
     shutil.copy(versioned_csv, active_csv)
-    
+
     print(f"Grog save reproducible dataset to {versioned_csv} and symlinked to {active_csv}")
-    
+
     # Call production pipeline script
     print("Grog run production Python script to train model...")
     cmd = [
         sys.executable, "ml_pipeline/train.py",
         "--input_csv", str(versioned_csv)
     ]
-    
+
     result = subprocess.run(cmd, capture_output=True, text=True, cwd=".")
-    
+
     if result.returncode != 0:
         print("Ugh! Train failed!")
         print(result.stderr)
@@ -91,6 +97,6 @@ def main():
         print(f"Train SUCCESS! Rock learned on {args.patch} {args.dataset}!")
         print("Model output:")
         print("\n".join(result.stdout.split("\n")[-10:]))
-        
+
 if __name__ == "__main__":
     main()

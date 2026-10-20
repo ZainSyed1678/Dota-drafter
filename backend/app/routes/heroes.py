@@ -1,4 +1,5 @@
 from fastapi import APIRouter
+
 from app.model_loader import store
 
 router = APIRouter(tags=["heroes"])

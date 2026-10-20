@@ -8,6 +8,11 @@ dist/
 build/
 .eggs/
 
+# Testing & Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
 # Jupyter
 .ipynb_checkpoints/
 *.ipynb_checkpoints
@@ -18,8 +23,14 @@ venv/
 env/
 .env
 
-# Model files — large binaries, don't push to GitHub
-# Regenerate by running the notebook
+# Large match data files (keep fixtures for CI)
+*.csv
+!tests/fixtures/*.csv
+data/*.csv
+notebooks/*.csv
+matches*.csv
+
+# Model binaries at root level (versioned models stored under model/vX.Y.Z/)
 model/*.pkl
 model1/
 
@@ -28,15 +39,12 @@ frontend/node_modules/
 frontend/dist/
 frontend/.vite/
 
-# Backend
+# Backend & Cache
 backend/__pycache__/
 
-# OS
+# OS & Docker
 .DS_Store
 Thumbs.db
-
-# Docker
 *.log
-
 /app
 graphify-out/

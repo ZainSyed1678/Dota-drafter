@@ -1,10 +1,10 @@
-from fastapi import APIRouter, HTTPException, Response, Request, Header
 from typing import Optional
-from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 
+from fastapi import APIRouter, Header, HTTPException
+
+from app.cache import draft_cache
 from app.config import settings
 from app.model_loader import store
-from app.cache import draft_cache
 
 router = APIRouter(tags=["health"])
 

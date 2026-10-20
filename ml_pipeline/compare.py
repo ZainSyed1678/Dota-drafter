@@ -1,11 +1,13 @@
 import os
-import sys
 import pickle
+import sys
+
 import numpy as np
 
 # Add backend to sys path so we can use scoring
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'backend')))
 import scoring
+
 
 def _load(name: str):
     path = os.path.join("backend", "model", name)
@@ -14,7 +16,7 @@ def _load(name: str):
 
 def run_comparison():
     print("=== DOTA 2 PREDICTION AUDIT ===")
-    
+
     try:
         model = _load("model.pkl")
     except Exception as e:
@@ -24,13 +26,13 @@ def run_comparison():
     # Sample draft
     enemy_names = ["Meepo", "Chaos Knight"]
     ally_names = ["Drow Ranger"]
-    
+
     enemy_ids = scoring.resolve(enemy_names)
     ally_ids = scoring.resolve(ally_names)
-    
+
     selected = set(enemy_ids + ally_ids)
     candidates = [h for h in scoring.hero_map.keys() if h not in selected]
-    
+
     # 1. Backend Heuristic Predictions
     print("\n--- HEURISTIC MATH (Production Backend) ---")
     h_scored = []
@@ -42,7 +44,7 @@ def run_comparison():
         if abs(m) < 0.005:
             score -= 0.02
         h_scored.append((hero_id, score))
-        
+
     h_scored.sort(key=lambda x: x[1], reverse=True)
     for i, (hid, score) in enumerate(h_scored[:5], 1):
         name = scoring.id_to_name[hid]
@@ -54,36 +56,36 @@ def run_comparison():
     NUM_HEROES = len(scoring.hero_map)
     heroes_list = sorted(list(scoring.hero_map.keys()))
     hero_to_idx = {h: i for i, h in enumerate(heroes_list)}
-    
+
     for hero_id in candidates:
         vec = []
         hero_vec = np.zeros(NUM_HEROES)
-        
+
         team = ally_ids + [hero_id]
-        
+
         for h in team:
             if h in hero_to_idx:
                 hero_vec[hero_to_idx[h]] = 1
         for h in enemy_ids:
             if h in hero_to_idx:
                 hero_vec[hero_to_idx[h]] = -1
-                
+
         vec.extend(hero_vec)
-        
+
         radiant_wr = np.mean([scoring.hero_winrate.get(h, 0.5) for h in team])
         dire_wr = np.mean([scoring.hero_winrate.get(h, 0.5) for h in enemy_ids])
-        
+
         vec.append(2 * radiant_wr)
         vec.append(2 * dire_wr)
         vec.append(3 * (radiant_wr - dire_wr))
-        
+
         matchup_score = 0
         for r in team:
             for d in enemy_ids:
                 val = scoring.matchup_matrix.get((r, d), 0.5) - 0.5
                 matchup_score += val
         vec.append(4 * matchup_score)
-        
+
         synergy_score = 0
         for i in range(len(team)):
             for j in range(i+1, len(team)):
@@ -92,7 +94,7 @@ def run_comparison():
                 val = scoring.synergy_matrix.get(pair, scoring.synergy_matrix.get(rev_pair, 0.5)) - 0.5
                 synergy_score += val
         vec.append(2 * synergy_score)
-        
+
         try:
             # Check if model has predict_proba
             if hasattr(model, 'predict_proba'):
@@ -102,12 +104,12 @@ def run_comparison():
             x_scored.append((hero_id, prob))
         except Exception:
             x_scored.append((hero_id, 0.5))
-            
+
     x_scored.sort(key=lambda x: x[1], reverse=True)
     for i, (hid, score) in enumerate(x_scored[:5], 1):
         name = scoring.id_to_name[hid]
         print(f"{i}. {name} (Win Probability: {score:.4f})")
-        
+
     print("\n--- CONCLUSION ---")
     print("XGBoost and Heuristics suggest different heroes.")
     print("Heuristics heavily weight raw winrates and matrices.")

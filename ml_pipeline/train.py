@@ -11,24 +11,23 @@ Implements Phase 2 & Phase 4:
 - Records data freshness (latest match ID, patch, match count, git commit hash)
 """
 
-import os
-import sys
-import json
-import ast
 import argparse
+import ast
+import datetime
+import json
+import os
 import pickle
 import shutil
-import datetime
 import subprocess
-from pathlib import Path
 from collections import defaultdict
+from pathlib import Path
 
+import lightgbm as lgb
 import numpy as np
 import pandas as pd
 import requests
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score, log_loss, roc_auc_score, brier_score_loss
-import lightgbm as lgb
+from sklearn.metrics import accuracy_score, brier_score_loss, log_loss, roc_auc_score
 
 
 def clean_team(x):

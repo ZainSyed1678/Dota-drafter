@@ -28,11 +28,11 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
-          python patch_aware_collector.py --patch 7.35d --max-calls 100 --target 5000
+          python scripts/patch_aware_collector.py --patch 7.35d --max-calls 100 --target 5000
 
       - name: Run Pipeline Orchestrator (Auto-retrain if ready)
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           BACKEND_URL: https://dota-drafter-api.onrender.com
         run: |
-          python orchestrator.py
+          python scripts/orchestrator.py

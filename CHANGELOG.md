@@ -104,6 +104,44 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - Full mobile viewport responsiveness with floating bottom action dock.
 - Environment variables documentation: added `.env.example` in repo root and `backend/.env.example`.
 
+## [Phase 6 — Tests, CI & Repo Hygiene] - 2026-10-20
+
+### Added
+- Sampled offline fixture dataset: `tests/fixtures/matches_fixture.csv` (1,500 matches, 84.5 KB) for hermetic offline test runs and CI pipelines.
+- Data preparation script: `ml_pipeline/prepare_data.py` enforcing 5v5 validation, hero deduplication, and chronological sorting.
+- Interactive notebook: `notebooks/exploration.ipynb` calling `ml_pipeline` functions directly for reproducible exploratory experiments.
+- Pytest test suite (20 tests passing):
+  - `tests/test_scoring.py`: Mathematical verification of empirical-Bayes shrinkage, patch recency weights, normalized matchup centering, synergy centering, role inference, and scoring probability bounds.
+  - `tests/test_leakage.py`: Strict validation that test/val feature matrices never incorporate future match data (temporal split integrity).
+  - `tests/test_api.py`: Comprehensive FastAPI integration tests covering `/health`, `/heroes`, `/suggest`, numeric IDs, ban filters, role-aware inference, LRU caching, and validation error contracts.
+- Automated CI workflow: `.github/workflows/ci.yml` running Ruff linting, Mypy light type check, pytest suite on fixtures, frontend build (`npm run build`), and Docker image builds.
+- Unified development Makefile: `make data`, `make train`, `make eval`, `make test`, `make lint`, `make up`, `make down`, `make clean`.
+- Match data documentation: `data/README.md` documenting OpenDota collection scripts, rate limiting (1.2s delay), and dataset preparation.
+- Code quality configuration: `pyproject.toml` (Ruff & Mypy settings) and `pytest.ini`.
+
+### Changed & Reorganized
+- Moved active root utility scripts into `scripts/`:
+  - `collect_to_psql.py` -> `scripts/collect_to_psql.py`
+  - `patch_aware_collector.py` -> `scripts/patch_aware_collector.py`
+  - `orchestrator.py` -> `scripts/orchestrator.py`
+  - `lifecycle_manager.py` -> `scripts/lifecycle_manager.py`
+  - `train_from_psql.py` -> `scripts/train_from_psql.py`
+  - `test_lifecycle.py` -> `scripts/test_lifecycle.py`
+- Updated GitHub Actions collector cron workflow `.github/workflows/collector.yml` to target scripts in `scripts/`.
+- Updated root `requirements.txt` to reflect production dependencies, linting, and testing packages.
+- Updated `.gitignore` to strictly exclude large CSV files while keeping CI fixture datasets.
+
+### Removed
+- Deleted legacy dead files:
+  - `patch.py` (obsolete 14-line script)
+  - `train_scheduler.py` (superseded by orchestrator and collector pipeline)
+  - Root `main.py` (superseded by `backend/app/main.py`)
+  - Root `matches.csv` and `notebooks/matches*.csv` (superseded by data collection scripts and fixture)
+  - `core/` (`core/utils.py` and `core/__init__.py`)
+  - `backend/tests/` (superseded by canonical root `tests/`)
+  - Legacy notebooks `notebooks/first.ipynb`, `second.ipynb`, `second.py` and old tracked pickle files.
+
+
 
 
 

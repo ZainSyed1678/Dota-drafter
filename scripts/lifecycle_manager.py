@@ -1,7 +1,7 @@
+import os
+
 import psycopg2
 from psycopg2.extras import DictCursor
-import os
-from datetime import datetime
 
 try:
     from dotenv import load_dotenv
@@ -60,14 +60,14 @@ def detect_patch(version: str):
             cur.execute("INSERT INTO patches (patch_version) VALUES (%s) ON CONFLICT DO NOTHING", (version,))
             cur.execute("SELECT COUNT(*) FROM patch_lifecycle WHERE patch_version = %s", (version,))
             if cur.fetchone()[0] == 0:
-                cur.execute("INSERT INTO patch_lifecycle (patch_version, state) VALUES (%s, %s)", 
+                cur.execute("INSERT INTO patch_lifecycle (patch_version, state) VALUES (%s, %s)",
                             (version, 'PATCH_DETECTED'))
         conn.commit()
 
 def transition_state(version: str, new_state: str):
     with get_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute("UPDATE patch_lifecycle SET state = %s, updated_at = CURRENT_TIMESTAMP WHERE patch_version = %s", 
+            cur.execute("UPDATE patch_lifecycle SET state = %s, updated_at = CURRENT_TIMESTAMP WHERE patch_version = %s",
                         (new_state, version))
         conn.commit()
 
@@ -100,8 +100,8 @@ def register_feature(patch_or_id, feature_version: str, num_features: int = 124,
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute("""
-                INSERT INTO feature_metadata (patch_version, feature_version, num_features, feature_names) 
-                VALUES (%s, %s, %s, %s) 
+                INSERT INTO feature_metadata (patch_version, feature_version, num_features, feature_names)
+                VALUES (%s, %s, %s, %s)
                 ON CONFLICT (patch_version, feature_version) DO NOTHING
             """, (patch_str, feature_version, num_features, json.dumps(feature_names)))
         conn.commit()
