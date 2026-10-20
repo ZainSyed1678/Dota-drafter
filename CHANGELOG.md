@@ -53,3 +53,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - `backend/config.py`:
   - Default `PREDICTION_ENGINE` upgraded to `"combined"`.
 
+## [Phase 3 — Draft Realism, Bans, Roles & Validation] - 2026-10-20
+
+### Added
+- Role-aware recommendation engine (`backend/scoring.py:infer_missing_roles`): automatically identifies unfulfilled team positions (carry, mid, offlane, support) from current allies or honors explicit `roles_needed` parameter.
+- Ban filtering: accepts optional `bans` list and guarantees banned and picked heroes are completely removed from recommendation pool.
+- Rank bracket filtering support: accepts optional `bracket` filter; gracefully falls back to global matrices with explanatory `bracket_note` when bracket-specific splits are unavailable.
+- Robust Pydantic schema validation:
+  - Strict team size limits: maximum 5 enemies, maximum 4 allies (user picks the 5th).
+  - Intra-list duplicate detection across enemy, ally, and ban lists.
+  - Cross-list disjoint validation: prevents heroes from appearing on both teams or simultaneously in ban and pick lists.
+  - Unknown hero detection: validates all hero inputs against loaded heroes, raising HTTP 422 with a clear error message.
+  - Transparent dual input contract: seamlessly accepts both numeric Dota 2 hero IDs and string localized names.
+
+

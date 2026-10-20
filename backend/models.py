@@ -1,40 +1,85 @@
-from pydantic import BaseModel, field_validator, model_validator
+from typing import Any, List, Optional, Union
+from pydantic import BaseModel, Field, field_validator, model_validator
+
 
 class DraftRequest(BaseModel):
-    enemy: list[str] = []
-    team:  list[str] = []
+    enemy: List[Union[str, int]] = Field(default_factory=list, description="Enemy team heroes (IDs or names, max 5)")
+    team: List[Union[str, int]] = Field(default_factory=list, description="Allied team heroes (IDs or names, max 4)")
+    bans: List[Union[str, int]] = Field(default_factory=list, description="Banned heroes (IDs or names)")
+    roles_needed: Optional[List[str]] = Field(default=None, description="Explicit roles to fill (carry, mid, offlane, support)")
+    role_aware: bool = Field(default=False, description="Enable role-aware suggestion mode")
+    bracket: Optional[str] = Field(default="all", description="Rank bracket filter (e.g. divine_plus, legend_ancient, all)")
 
-    @field_validator("enemy", "team")
+    @field_validator("enemy")
     @classmethod
-    def validate_team_size_and_clean(cls, v: list[str], info) -> list[str]:
-        field_name = info.field_name
+    def validate_enemy_size(cls, v: list) -> list:
         if len(v) > 5:
-            raise ValueError(f"Too many heroes for {field_name}. Maximum allowed is 5 heroes.")
-        
-        cleaned = [name.strip() for name in v if name and isinstance(name, str) and name.strip()]
-        
-        # Check for duplicates within the team
-        seen = set()
-        duplicates = []
-        for name in cleaned:
-            low = name.lower()
-            if low in seen:
-                duplicates.append(name)
-            seen.add(low)
-            
-        if duplicates:
-            raise ValueError(f"Duplicate heroes detected in {field_name}: {', '.join(duplicates)}")
-            
+            raise ValueError("Too many enemy heroes. Maximum allowed is 5 heroes.")
+        return v
+
+    @field_validator("team")
+    @classmethod
+    def validate_team_size(cls, v: list) -> list:
+        if len(v) > 4:
+            raise ValueError("Too many allied heroes. Maximum allowed is 4 heroes (you are picking the 5th).")
+        return v
+
+    @field_validator("roles_needed")
+    @classmethod
+    def validate_roles(cls, v: Optional[list]) -> Optional[list]:
+        if v is None:
+            return v
+        valid_roles = {"carry", "mid", "offlane", "support"}
+        cleaned = []
+        for r in v:
+            r_clean = str(r).strip().lower()
+            if r_clean not in valid_roles:
+                raise ValueError(f"Invalid role '{r}'. Valid roles are: {', '.join(sorted(valid_roles))}")
+            cleaned.append(r_clean)
         return cleaned
 
     @model_validator(mode="after")
-    def validate_no_cross_team_duplicates(self):
-        team_set = {h.lower() for h in self.team}
-        enemy_set = {h.lower() for h in self.enemy}
-        overlap = team_set & enemy_set
-        if overlap:
-            raise ValueError(f"A hero cannot be picked on both teams simultaneously: {', '.join(overlap)}")
+    def validate_heroes_and_overlaps(self):
+        import scoring
+
+        # 1. Resolve and validate hero existence (raises ValueError on unknown heroes)
+        enemy_ids = scoring.resolve_or_raise(self.enemy, "enemy")
+        team_ids = scoring.resolve_or_raise(self.team, "team")
+        ban_ids = scoring.resolve_or_raise(self.bans, "bans")
+
+        # 2. Check intra-list duplicates
+        for lst_name, id_list, raw_list in [("enemy", enemy_ids, self.enemy), ("team", team_ids, self.team), ("bans", ban_ids, self.bans)]:
+            if len(id_list) != len(set(id_list)):
+                seen = set()
+                dups = []
+                for hid, raw in zip(id_list, raw_list):
+                    if hid in seen:
+                        dups.append(str(raw))
+                    seen.add(hid)
+                raise ValueError(f"Duplicate heroes detected in {lst_name} list: {', '.join(dups)}")
+
+        # 3. Check cross-team overlap
+        enemy_set = set(enemy_ids)
+        team_set = set(team_ids)
+        overlap_teams = enemy_set & team_set
+        if overlap_teams:
+            names = [scoring.id_to_name.get(h, str(h)) for h in overlap_teams]
+            raise ValueError(f"A hero cannot be picked on both teams simultaneously: {', '.join(names)}")
+
+        # 4. Check ban overlap
+        ban_set = set(ban_ids)
+        overlap_bans_enemy = ban_set & enemy_set
+        if overlap_bans_enemy:
+            names = [scoring.id_to_name.get(h, str(h)) for h in overlap_bans_enemy]
+            raise ValueError(f"A hero cannot be both banned and picked on enemy team: {', '.join(names)}")
+
+        overlap_bans_team = ban_set & team_set
+        if overlap_bans_team:
+            names = [scoring.id_to_name.get(h, str(h)) for h in overlap_bans_team]
+            raise ValueError(f"A hero cannot be both banned and picked on your team: {', '.join(names)}")
+
         return self
+
 
 class ReasonDetail(BaseModel):
     summary: str
@@ -45,6 +90,7 @@ class ReasonDetail(BaseModel):
     beginner_tip: str = ""
     sample_size: int = 0
     confidence: str = "medium"  # low | medium | high
+
 
 class HeroSuggestion(BaseModel):
     id:             int
@@ -58,6 +104,11 @@ class HeroSuggestion(BaseModel):
     difficulty:     str = "Easy"
     overview:       str = ""
 
-class SuggestResponse(BaseModel):
 
+class SuggestResponse(BaseModel):
     picks: list[HeroSuggestion]
+    roles_needed: list[str] = []
+    role_aware: bool = False
+    bracket: str = "all"
+    bracket_fallback: bool = False
+    bracket_note: Optional[str] = None

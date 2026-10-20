@@ -54,6 +54,7 @@ HERO_COUNT = Gauge("dota_loaded_heroes_total", "Number of loaded heroes in model
 ACTIVE_ENGINE = Gauge("dota_active_prediction_engine", "Prediction engine: 1 for ML, 0 for heuristic")
 MODEL_LOAD_TIME = Gauge("dota_model_load_timestamp_seconds", "Timestamp when models were last loaded")
 
+
 @app.middleware("http")
 async def security_and_telemetry_middleware(request: Request, call_next):
     endpoint = request.url.path
@@ -76,6 +77,7 @@ async def security_and_telemetry_middleware(request: Request, call_next):
         REQUEST_COUNT.labels(method=request.method, endpoint=endpoint, status=status_code).inc()
         REQUEST_LATENCY.labels(endpoint=endpoint).observe(latency)
 
+
 # Standard JSON Error Handlers
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
@@ -94,6 +96,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         }
     )
 
+
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
     return JSONResponse(
@@ -105,6 +108,7 @@ async def http_exception_handler(request: Request, exc: HTTPException):
             "status_code": exc.status_code
         }
     )
+
 
 @app.exception_handler(Exception)
 async def generic_exception_handler(request: Request, exc: Exception):
@@ -118,6 +122,7 @@ async def generic_exception_handler(request: Request, exc: Exception):
         }
     )
 
+
 @app.get("/metrics")
 def metrics():
     HERO_COUNT.set(len(scoring.hero_map))
@@ -129,6 +134,7 @@ def metrics():
         except Exception:
             pass
     return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
 
 @app.on_event("startup")
 def startup_event():
@@ -142,6 +148,7 @@ def startup_event():
         except Exception as e:
             log.warning(f"Could not start Telegram bot: {e}")
 
+
 @app.get("/")
 def root():
     return {
@@ -152,14 +159,17 @@ def root():
         "health": "/health"
     }
 
+
 @app.get("/health")
 def health():
     ready = scoring.model_metadata["status"] == "ready"
     return {"status": "ok" if ready else scoring.model_metadata["status"], "heroes": len(scoring.hero_map)}
 
+
 @app.get("/model/status")
 def model_status():
     return scoring.model_metadata
+
 
 @app.post("/model/reload")
 def model_reload():
@@ -168,6 +178,7 @@ def model_reload():
         return {"status": "success", "metadata": scoring.model_metadata}
     else:
         raise HTTPException(500, detail="Failed to reload model files from disk.")
+
 
 @app.get("/debug")
 def debug():
@@ -180,9 +191,11 @@ def debug():
         "total_synergy_pairs": len(scoring.synergy_matrix),
     }
 
+
 @app.get("/heroes")
 def heroes():
     return scoring.hero_map
+
 
 @app.post("/suggest", response_model=SuggestResponse)
 @limiter.limit("60/minute")
@@ -190,27 +203,62 @@ def suggest(request: Request, req: DraftRequest):
     if not scoring.hero_map:
         raise HTTPException(503, "Model not loaded yet — pkl files missing")
 
-    enemy_ids = scoring.resolve(req.enemy)
-    ally_ids  = scoring.resolve(req.team)
-    selected  = set(enemy_ids + ally_ids)
+    enemy_ids = scoring.resolve_or_raise(req.enemy, "enemy")
+    ally_ids  = scoring.resolve_or_raise(req.team, "team")
+    ban_ids   = scoring.resolve_or_raise(req.bans, "bans")
+    selected  = set(enemy_ids + ally_ids + ban_ids)
+
+    # Determine role-aware mode and target roles
+    is_role_aware = req.role_aware or bool(req.roles_needed)
+    if req.roles_needed:
+        target_roles = [r.lower().strip() for r in req.roles_needed]
+    elif req.role_aware:
+        target_roles = scoring.infer_missing_roles(ally_ids)
+    else:
+        target_roles = []
+
+    # Bracket handling
+    bracket = req.bracket or "all"
+    bracket_note = None
+    bracket_fallback = False
+    if bracket.lower() != "all":
+        bracket_fallback = True
+        bracket_note = f"Rank bracket '{bracket}' requested, but separate bracket data is unavailable. Falling back to global matrices."
 
     scored = []
     engine = scoring.settings.PREDICTION_ENGINE
-    
+
     for hero_id in scoring.hero_map:
         if hero_id in selected:
             continue
-            
-        score = scoring.predict(hero_id, enemy_ids, ally_ids, engine=engine)
-        scored.append((hero_id, score))
 
-    scored.sort(key=lambda x: x[1], reverse=True)
+        score = scoring.predict(hero_id, enemy_ids, ally_ids, engine=engine)
+        h_roles = set(scoring.get_roles(hero_id))
+        matches_role = bool(h_roles & set(target_roles)) if is_role_aware else True
+        scored.append((hero_id, score, matches_role))
+
+    if is_role_aware and target_roles:
+        # Prioritize candidates that fit the required roles
+        role_candidates = [x for x in scored if x[2]]
+        role_candidates.sort(key=lambda x: x[1], reverse=True)
+        selected_picks = role_candidates[:9]
+        if len(selected_picks) < 9:
+            other_candidates = [x for x in scored if not x[2]]
+            other_candidates.sort(key=lambda x: x[1], reverse=True)
+            selected_picks.extend(other_candidates[: 9 - len(selected_picks)])
+    else:
+        scored.sort(key=lambda x: x[1], reverse=True)
+        selected_picks = scored[:9]
 
     picks = []
-    for hero_id, score in scored[:9]:
+    enemy_names = [scoring.id_to_name.get(e, str(e)) for e in enemy_ids]
+    ally_names = [scoring.id_to_name.get(a, str(a)) for a in ally_ids]
+
+    for item in selected_picks:
+        hero_id, score = item[0], item[1]
         hero_name = scoring.id_to_name[hero_id]
         reasons, reason_details, hero_conf, hero_samples = scoring.build_reasons_and_details(
-            hero_id, enemy_ids, req.enemy, ally_ids, req.team
+            hero_id, enemy_ids, enemy_names, ally_ids, ally_names
         )
         picks.append(HeroSuggestion(
             id             = hero_id,
@@ -225,4 +273,11 @@ def suggest(request: Request, req: DraftRequest):
             overview       = scoring.get_hero_overview(hero_name),
         ))
 
-    return SuggestResponse(picks=picks)
+    return SuggestResponse(
+        picks=picks,
+        roles_needed=target_roles,
+        role_aware=is_role_aware,
+        bracket=bracket,
+        bracket_fallback=bracket_fallback,
+        bracket_note=bracket_note
+    )

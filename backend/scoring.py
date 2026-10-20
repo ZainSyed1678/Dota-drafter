@@ -125,21 +125,70 @@ def get_roles(hero_id: int) -> List[str]:
     return [x.lower() for x in (r if isinstance(r, list) else [r])]
 
 
+def resolve_hero_id(identifier: Any) -> Any:
+    """Resolve hero name or numeric ID to valid integer hero ID."""
+    if identifier is None:
+        return None
+    try:
+        nid = int(identifier)
+        if nid in hero_map:
+            return nid
+    except (ValueError, TypeError):
+        pass
+
+    s = str(identifier).strip().lower()
+    if s in name_to_id:
+        return name_to_id[s]
+    return None
+
+
+def resolve_or_raise(identifiers: List[Any], field_name: str) -> List[int]:
+    """Resolve list of identifiers or raise ValueError for unknown heroes."""
+    if not hero_map:
+        load_models()
+
+    out = []
+    for item in identifiers:
+        hid = resolve_hero_id(item)
+        if hid is None:
+            raise ValueError(f"Unknown hero '{item}' in {field_name}. Please provide a valid Dota 2 hero name or ID.")
+        out.append(hid)
+    return out
+
+
+def infer_missing_roles(ally_ids: List[int]) -> List[str]:
+    """
+    Infer missing roles from current allies.
+    Standard Dota composition: 1 carry, 1 mid, 1 offlane, 2 supports.
+    """
+    role_counts = {"carry": 0, "mid": 0, "offlane": 0, "support": 0}
+    for aid in ally_ids:
+        roles = get_roles(aid)
+        for r in roles:
+            if r in role_counts:
+                role_counts[r] += 1
+
+    needed = []
+    if role_counts["carry"] == 0:
+        needed.append("carry")
+    if role_counts["mid"] == 0:
+        needed.append("mid")
+    if role_counts["offlane"] == 0:
+        needed.append("offlane")
+    if role_counts["support"] < 2:
+        needed.append("support")
+
+    if not needed:
+        needed = ["carry", "mid", "offlane", "support"]
+    return needed
+
+
 def resolve(names: List[str]) -> List[int]:
     out, missing = [], []
     for n in names:
-        # Check if already numeric ID
-        try:
-            nid = int(n)
-            if nid in hero_map:
-                out.append(nid)
-                continue
-        except (ValueError, TypeError):
-            pass
-
-        rid = name_to_id.get(str(n).lower().strip())
-        if rid is not None:
-            out.append(rid)
+        hid = resolve_hero_id(n)
+        if hid is not None:
+            out.append(hid)
         else:
             missing.append(n)
     if missing:
