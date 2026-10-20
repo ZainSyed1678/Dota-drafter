@@ -1,13 +1,14 @@
 """
 Dota 2 Drafter - Leakage-Free Training Pipeline with Empirical-Bayes Shrinkage & Learned Combiner
-Implements Phase 2:
+Implements Phase 2 & Phase 4:
 - Strict chronological time-based split (Train 70%, Validation 15%, Test 15%)
-- Recency weighting on training matches
+- Patch-aware recency weighting configured via training_config.json
 - Empirical-Bayes / Beta-prior shrinkage for matchup and synergy matrices
 - Sample size and confidence level tracking
 - LightGBM model training with early stopping
 - Learned combination weights via Logistic Regression on the validation slice
-- Serializes model artifacts and metadata.json
+- Model versioning: writes to model/<version>/ with metadata.json
+- Records data freshness (latest match ID, patch, match count, git commit hash)
 """
 
 import os
@@ -16,9 +17,11 @@ import json
 import ast
 import argparse
 import pickle
+import shutil
 import datetime
+import subprocess
 from pathlib import Path
-from collections import defaultdict, Counter
+from collections import defaultdict
 
 import numpy as np
 import pandas as pd
@@ -44,6 +47,14 @@ def clean_team(x):
         return []
 
 
+def get_git_commit_hash():
+    """Retrieve current git commit hash."""
+    try:
+        return subprocess.check_output(["git", "rev-parse", "--short", "HEAD"]).decode().strip()
+    except Exception:
+        return "unknown"
+
+
 def load_hero_metadata():
     """Load hero names and roles from OpenDota API with local cache fallback."""
     try:
@@ -52,7 +63,7 @@ def load_hero_metadata():
             hero_data = resp.json()
             hero_map = {int(h['id']): h['localized_name'] for h in hero_data}
             api_roles = {int(h['id']): h.get('roles', []) for h in hero_data}
-            
+
             hero_roles = {}
             for hid, roles in api_roles.items():
                 clean = []
@@ -66,7 +77,6 @@ def load_hero_metadata():
     except Exception as e:
         print(f"Warning: OpenDota API unavailable ({e}), falling back to cached hero metadata.")
 
-    # Fallback to backend/model if exists
     cache_dir = Path(__file__).resolve().parent.parent / "backend" / "model"
     hero_map_path = cache_dir / "hero_map.pkl"
     roles_path = cache_dir / "roles.pkl"
@@ -75,7 +85,6 @@ def load_hero_metadata():
         with open(roles_path, "rb") as f: hero_roles = pickle.load(f)
         return hero_map, hero_roles
 
-    # Minimal fallback
     return {}, {}
 
 
@@ -133,10 +142,34 @@ def extract_score_components(df_in, hero_wr, global_prior, matchup_dict, synergy
     return np.column_stack([M_list, S_list, W_list])
 
 
-def train_pipeline(input_csv: str, output_dir: str, k_matchup: float = 20.0, k_synergy: float = 20.0, recency_lambda: float = 0.2):
+def train_pipeline(
+    input_csv: str,
+    output_dir: str,
+    config_path: str = "ml_pipeline/training_config.json",
+    version: str = "v2.2.0"
+):
     print("=" * 70)
-    print("Dota 2 Drafter - Model Training & Learned Scoring Pipeline (Phase 2)")
+    print(f"Dota 2 Drafter - Model Training & Versioning Pipeline ({version})")
     print("=" * 70)
+
+    # 1. Load config
+    cfg_file = Path(config_path)
+    if cfg_file.exists():
+        with open(cfg_file, "r") as f:
+            cfg = json.load(f)
+        print(f"Loaded training config from {cfg_file}")
+    else:
+        cfg = {
+            "recency": {"decay_type": "patch_exponential", "lambda_time": 0.2, "patch_weights": {"7.35d": 1.0}, "default_patch_weight": 0.5},
+            "shrinkage": {"k_matchup": 20.0, "k_synergy": 20.0},
+            "splits": {"train_ratio": 0.70, "val_ratio": 0.15, "test_ratio": 0.15}
+        }
+
+    k_matchup = cfg.get("shrinkage", {}).get("k_matchup", 20.0)
+    k_synergy = cfg.get("shrinkage", {}).get("k_synergy", 20.0)
+    recency_lambda = cfg.get("recency", {}).get("lambda_time", 0.2)
+    patch_weights = cfg.get("recency", {}).get("patch_weights", {})
+    default_patch_weight = cfg.get("recency", {}).get("default_patch_weight", 0.5)
 
     input_path = Path(input_csv)
     if not input_path.exists():
@@ -147,7 +180,6 @@ def train_pipeline(input_csv: str, output_dir: str, k_matchup: float = 20.0, k_s
     df['radiant_team'] = df['radiant_team'].apply(clean_team)
     df['dire_team'] = df['dire_team'].apply(clean_team)
 
-    # 5v5 validation: exactly 5 distinct heroes per team, no overlap
     valid_mask = (
         df['radiant_team'].apply(lambda t: len(t) == 5 and len(set(t)) == 5) &
         df['dire_team'].apply(lambda t: len(t) == 5 and len(set(t)) == 5) &
@@ -157,9 +189,16 @@ def train_pipeline(input_csv: str, output_dir: str, k_matchup: float = 20.0, k_s
     total_valid = len(df)
     print(f"Valid 5v5 matches: {total_valid}")
 
-    # Chronological time-based split
-    n_train = int(total_valid * 0.70)
-    n_val = int(total_valid * 0.15)
+    # Freshness info
+    latest_match_id = int(df['match_id'].max())
+    latest_patch = str(df['patch_version'].iloc[-1]) if 'patch_version' in df.columns else "unknown"
+
+    # Time-based split
+    train_ratio = cfg.get("splits", {}).get("train_ratio", 0.70)
+    val_ratio = cfg.get("splits", {}).get("val_ratio", 0.15)
+    n_train = int(total_valid * train_ratio)
+    n_val = int(total_valid * val_ratio)
+
     train_df = df.iloc[:n_train].copy().reset_index(drop=True)
     val_df = df.iloc[n_train:n_train + n_val].copy().reset_index(drop=True)
     test_df = df.iloc[n_train + n_val:].copy().reset_index(drop=True)
@@ -170,14 +209,13 @@ def train_pipeline(input_csv: str, output_dir: str, k_matchup: float = 20.0, k_s
 
     print(f"Splits: Train={len(train_df)} | Val={len(val_df)} | Test={len(test_df)}")
 
-    # Hero indexing based on training set
+    # Heroes in training
     all_heroes = set()
     for _, r in train_df.iterrows():
         all_heroes.update(r['radiant_team'])
         all_heroes.update(r['dire_team'])
     sorted_heroes = sorted(list(all_heroes))
     hero_to_idx = {h: i for i, h in enumerate(sorted_heroes)}
-    print(f"Total unique heroes in training set: {len(sorted_heroes)}")
 
     hero_map, hero_roles = load_hero_metadata()
     for h in sorted_heroes:
@@ -186,15 +224,18 @@ def train_pipeline(input_csv: str, output_dir: str, k_matchup: float = 20.0, k_s
         if h not in hero_roles:
             hero_roles[h] = ["offlane"]
 
-    # Recency weights on training set
+    # Patch-aware recency weighting
     N_tr = len(train_df)
-    if recency_lambda > 0:
-        pos = np.linspace(0, 1, N_tr)
-        weights = np.exp(-recency_lambda * (1.0 - pos))
-    else:
-        weights = np.ones(N_tr)
+    weights = np.zeros(N_tr)
+    for idx, row in train_df.iterrows():
+        pos = idx / N_tr
+        time_factor = np.exp(-recency_lambda * (1.0 - pos))
+        patch_ver = str(row.get('patch_version', ''))
+        patch_factor = patch_weights.get(patch_ver, default_patch_weight)
+        weights[idx] = time_factor * patch_factor
 
-    print(f"Computing recency-weighted statistics (lambda={recency_lambda})...")
+    print(f"Computed patch-aware recency weights (mean={np.mean(weights):.3f}, min={np.min(weights):.3f}, max={np.max(weights):.3f})")
+
     hero_wins = defaultdict(float)
     hero_games = defaultdict(float)
     matchup_wins = defaultdict(float)
@@ -236,16 +277,12 @@ def train_pipeline(input_csv: str, output_dir: str, k_matchup: float = 20.0, k_s
 
     hero_winrate = {}
     for h in sorted_heroes:
-        if hero_games[h] > 0:
-            hero_winrate[h] = hero_wins[h] / hero_games[h]
-        else:
-            hero_winrate[h] = 0.50
+        hero_winrate[h] = hero_wins[h] / hero_games[h] if hero_games[h] > 0 else 0.50
 
     global_prior = float(np.mean(list(hero_winrate.values()))) if hero_winrate else 0.50
     hero_avg_matchup = {h: hero_winrate.get(h, 0.50) for h in sorted_heroes}
 
     # Empirical-Bayes Shrinkage
-    print(f"Applying Empirical-Bayes Shrinkage (k_matchup={k_matchup}, k_synergy={k_synergy})...")
     shrunk_matchup = {}
     matchup_sample_sizes = {}
     for pair, g in matchup_games.items():
@@ -260,8 +297,7 @@ def train_pipeline(input_csv: str, output_dir: str, k_matchup: float = 20.0, k_s
         shrunk_synergy[pair] = (synergy_wins[pair] + k_synergy * 0.50) / (g + k_synergy)
         synergy_sample_sizes[pair] = int(round(g))
 
-    # Train LightGBM model
-    print("Building LightGBM training matrices...")
+    # Train LightGBM
     X_lgb_train = build_lgb_features(train_df, sorted_heroes, hero_to_idx, hero_winrate)
     X_lgb_val = build_lgb_features(val_df, sorted_heroes, hero_to_idx, hero_winrate)
     X_lgb_test = build_lgb_features(test_df, sorted_heroes, hero_to_idx, hero_winrate)
@@ -283,7 +319,6 @@ def train_pipeline(input_csv: str, output_dir: str, k_matchup: float = 20.0, k_s
         'random_state': 42
     }
 
-    print("Training LightGBM with early stopping...")
     lgb_model = lgb.train(
         lgb_params,
         lgb_train_data,
@@ -295,8 +330,7 @@ def train_pipeline(input_csv: str, output_dir: str, k_matchup: float = 20.0, k_s
     lgb_preds_val = lgb_model.predict(X_lgb_val)
     lgb_preds_test = lgb_model.predict(X_lgb_test)
 
-    # Fit Learned Combiner on Validation Set
-    print("Fitting learned combiner weights on validation slice...")
+    # Learned Combiner
     val_comps = extract_score_components(val_df, hero_winrate, global_prior, shrunk_matchup, shrunk_synergy)
     test_comps = extract_score_components(test_df, hero_winrate, global_prior, shrunk_matchup, shrunk_synergy)
 
@@ -316,51 +350,38 @@ def train_pipeline(input_csv: str, output_dir: str, k_matchup: float = 20.0, k_s
         'k_synergy': float(k_synergy),
         'recency_lambda': float(recency_lambda),
     }
-    print(f"Learned Weights: M={comb_weights['matchup']:.4f}, S={comb_weights['synergy']:.4f}, "
-          f"W={comb_weights['winrate']:.4f}, P_model={comb_weights['model']:.4f}, Intercept={comb_weights['intercept']:.4f}")
 
-    # Evaluate Combiner on Test Set
     comb_preds_test = combiner.predict_proba(X_comb_test)[:, 1]
     comb_test_acc = accuracy_score(y_test, comb_preds_test >= 0.5)
     comb_test_loss = log_loss(y_test, comb_preds_test)
     comb_test_auc = roc_auc_score(y_test, comb_preds_test)
     comb_test_brier = brier_score_loss(y_test, comb_preds_test)
 
-    print(f"\n--- Learned Combiner Test Performance ---")
-    print(f"Accuracy:   {comb_test_acc * 100:.2f}%")
-    print(f"Log-Loss:   {comb_test_loss:.4f}")
-    print(f"ROC-AUC:    {comb_test_auc:.4f}")
-    print(f"Brier:      {comb_test_brier:.4f}")
+    print(f"Learned Combiner Test Metrics: Acc={comb_test_acc*100:.2f}%, AUC={comb_test_auc:.4f}, Loss={comb_test_loss:.4f}")
 
-    # Save Artifacts
-    out_dir = Path(output_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
-    print(f"\nSaving model artifacts to {out_dir}...")
+    # Model Versioning: Save to model/<version>/
+    root_dir = Path(output_dir)
+    ver_dir = root_dir / version
+    ver_dir.mkdir(parents=True, exist_ok=True)
+    print(f"Saving model artifacts to version directory: {ver_dir}")
 
-    with open(out_dir / "model.pkl", "wb") as f: pickle.dump(lgb_model, f)
-    with open(out_dir / "hero_map.pkl", "wb") as f: pickle.dump(hero_map, f)
-    with open(out_dir / "roles.pkl", "wb") as f: pickle.dump(hero_roles, f)
-    with open(out_dir / "hero_winrate.pkl", "wb") as f: pickle.dump(hero_winrate, f)
-    with open(out_dir / "hero_avg_matchup.pkl", "wb") as f: pickle.dump(hero_avg_matchup, f)
-    with open(out_dir / "matchup.pkl", "wb") as f: pickle.dump(shrunk_matchup, f)
-    with open(out_dir / "matchup_samples.pkl", "wb") as f: pickle.dump(matchup_sample_sizes, f)
-    with open(out_dir / "synergy.pkl", "wb") as f: pickle.dump(shrunk_synergy, f)
-    with open(out_dir / "synergy_samples.pkl", "wb") as f: pickle.dump(synergy_sample_sizes, f)
-    with open(out_dir / "combiner_weights.pkl", "wb") as f: pickle.dump(comb_weights, f)
-
-    # Save metadata.json
-    metadata = {
-        "version": "2.1-shrunk-combiner",
-        "trained_at": datetime.datetime.now().isoformat(),
+    git_hash = get_git_commit_hash()
+    data_freshness = {
+        "latest_match_id": latest_match_id,
+        "latest_patch": latest_patch,
+        "match_count": total_valid,
         "training_matches": len(train_df),
         "validation_matches": len(val_df),
         "test_matches": len(test_df),
-        "num_heroes": len(sorted_heroes),
-        "shrinkage": {
-            "k_matchup": k_matchup,
-            "k_synergy": k_synergy,
-            "recency_lambda": recency_lambda
-        },
+        "latest_match_timestamp": datetime.datetime.now().isoformat()
+    }
+
+    metadata = {
+        "version": version,
+        "trained_at": datetime.datetime.now().isoformat(),
+        "git_commit": git_hash,
+        "data_freshness": data_freshness,
+        "config": cfg,
         "learned_weights": comb_weights,
         "test_metrics": {
             "accuracy": round(float(comb_test_acc), 4),
@@ -369,29 +390,43 @@ def train_pipeline(input_csv: str, output_dir: str, k_matchup: float = 20.0, k_s
             "brier_score": round(float(comb_test_brier), 4)
         }
     }
-    with open(out_dir / "metadata.json", "w") as f:
-        json.dump(metadata, f, indent=2)
 
-    print("Training pipeline finished successfully!")
+    for target_dir in [ver_dir, root_dir]:
+        with open(target_dir / "model.pkl", "wb") as f: pickle.dump(lgb_model, f)
+        with open(target_dir / "hero_map.pkl", "wb") as f: pickle.dump(hero_map, f)
+        with open(target_dir / "roles.pkl", "wb") as f: pickle.dump(hero_roles, f)
+        with open(target_dir / "hero_winrate.pkl", "wb") as f: pickle.dump(hero_winrate, f)
+        with open(target_dir / "hero_avg_matchup.pkl", "wb") as f: pickle.dump(hero_avg_matchup, f)
+        with open(target_dir / "matchup.pkl", "wb") as f: pickle.dump(shrunk_matchup, f)
+        with open(target_dir / "matchup_samples.pkl", "wb") as f: pickle.dump(matchup_sample_sizes, f)
+        with open(target_dir / "synergy.pkl", "wb") as f: pickle.dump(shrunk_synergy, f)
+        with open(target_dir / "synergy_samples.pkl", "wb") as f: pickle.dump(synergy_sample_sizes, f)
+        with open(target_dir / "combiner_weights.pkl", "wb") as f: pickle.dump(comb_weights, f)
+        with open(target_dir / "metadata.json", "w") as f: json.dump(metadata, f, indent=2)
+
+    # Copy heroes_metadata.json if present
+    src_meta = root_dir / "heroes_metadata.json"
+    if src_meta.exists():
+        shutil.copy2(src_meta, ver_dir / "heroes_metadata.json")
+
+    print(f"Successfully saved versioned model to {ver_dir} and synced to {root_dir}")
     return comb_weights, metadata
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Train Dota 2 Drafter models and learned scoring")
+    parser = argparse.ArgumentParser(description="Train Dota 2 Drafter models with versioning")
     parser.add_argument("--input_csv", type=str, default="notebooks/matches.csv", help="Path to matches CSV")
     default_out = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "backend", "model")
     parser.add_argument("--output_dir", type=str, default=default_out, help="Output directory for model artifacts")
-    parser.add_argument("--k_matchup", type=float, default=20.0, help="Shrinkage constant for matchup matrix")
-    parser.add_argument("--k_synergy", type=float, default=20.0, help="Shrinkage constant for synergy matrix")
-    parser.add_argument("--recency_lambda", type=float, default=0.2, help="Recency decay rate")
+    parser.add_argument("--config", type=str, default="ml_pipeline/training_config.json", help="Path to training config JSON")
+    parser.add_argument("--version", type=str, default="v2.2.0", help="Model version identifier")
     args = parser.parse_args()
 
     train_pipeline(
         input_csv=args.input_csv,
         output_dir=args.output_dir,
-        k_matchup=args.k_matchup,
-        k_synergy=args.k_synergy,
-        recency_lambda=args.recency_lambda
+        config_path=args.config,
+        version=args.version
     )
 
 

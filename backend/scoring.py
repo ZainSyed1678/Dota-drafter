@@ -1,6 +1,7 @@
 import os
+import json
 import pickle
-from typing import Dict, Tuple, List, Any
+from typing import Dict, Tuple, List, Any, Optional
 import numpy as np
 
 from logger import get_logger
@@ -16,6 +17,7 @@ log = get_logger("dota-api.scoring")
 
 # Global states
 hero_map: Dict[int, str] = {}
+heroes_list: List[Dict[str, Any]] = []
 matchup_matrix: Dict[Tuple[int, int], float] = {}
 matchup_samples: Dict[Tuple[int, int], int] = {}
 synergy_matrix: Dict[Tuple[int, int], float] = {}
@@ -24,11 +26,11 @@ hero_roles: Dict[int, List[str]] = {}
 hero_avg_matchup: Dict[int, float] = {}
 hero_winrate: Dict[int, float] = {}
 combiner_weights: Dict[str, float] = {
-    'matchup': 1.5644,
-    'synergy': 1.5201,
-    'winrate': 0.9665,
-    'model': 2.1890,
-    'intercept': 0.1045,
+    'matchup': 1.5604,
+    'synergy': 1.5120,
+    'winrate': 0.9607,
+    'model': 2.2110,
+    'intercept': 0.1035,
 }
 ml_model: Any = None
 id_to_name: Dict[int, str] = {}
@@ -37,28 +39,53 @@ sorted_hero_ids: List[int] = []
 hero_to_idx: Dict[int, int] = {}
 
 model_metadata: Dict[str, Any] = {
+    "version": "v2.2.0",
     "loaded_at": None,
     "status": "missing_core_files",
     "files": {},
     "combiner_weights": combiner_weights,
+    "data_freshness": {},
 }
 
 
-def load_models():
-    global hero_map, matchup_matrix, matchup_samples, synergy_matrix, synergy_samples, hero_roles
+def load_models(version: Optional[str] = None) -> bool:
+    global hero_map, heroes_list, matchup_matrix, matchup_samples, synergy_matrix, synergy_samples, hero_roles
     global hero_avg_matchup, hero_winrate, id_to_name, name_to_id, ml_model, combiner_weights
     global sorted_hero_ids, hero_to_idx, model_metadata
 
     import datetime
 
+    base_model_dir = settings.MODEL_DIR
+    target_dir = base_model_dir
+
+    # Support model/<version>/ directories
+    if version:
+        cand = os.path.join(base_model_dir, version)
+        if os.path.isdir(cand):
+            target_dir = cand
+    elif os.path.isdir(base_model_dir):
+        # Scan for version subdirectories (e.g. v2.2.0, v2.1.0)
+        subdirs = [
+            d for d in os.listdir(base_model_dir)
+            if os.path.isdir(os.path.join(base_model_dir, d)) and not d.startswith(".")
+            and os.path.exists(os.path.join(base_model_dir, d, "matchup.pkl"))
+        ]
+        if subdirs:
+            subdirs.sort(reverse=True)
+            target_dir = os.path.join(base_model_dir, subdirs[0])
+
+    log.info(f"Loading model artifacts from {target_dir}...")
     temp_metadata = {"files": {}}
 
     def _safe_load(name: str, required: bool = True):
-        path = os.path.join(settings.MODEL_DIR, name)
+        path = os.path.join(target_dir, name)
         if not os.path.exists(path):
-            if required:
-                raise RuntimeError(f"Required model file missing: {path}")
-            return None
+            # Fall back to base_model_dir if not found in version subfolder
+            path = os.path.join(base_model_dir, name)
+            if not os.path.exists(path):
+                if required:
+                    raise RuntimeError(f"Required model file missing: {path}")
+                return None
 
         stat = os.stat(path)
         temp_metadata["files"][name] = {
@@ -75,7 +102,6 @@ def load_models():
         new_synergy = _safe_load("synergy.pkl")
         new_roles = _safe_load("roles.pkl")
 
-        # Optional / advanced files
         new_ml_model = _safe_load("model.pkl", required=False)
         new_matchup_samples = _safe_load("matchup_samples.pkl", required=False) or {}
         new_synergy_samples = _safe_load("synergy_samples.pkl", required=False) or {}
@@ -83,9 +109,31 @@ def load_models():
         new_avg = _safe_load("hero_avg_matchup.pkl", required=False) or {}
         new_winrate = _safe_load("hero_winrate.pkl", required=False) or {}
 
-        log.info(f"Loaded models - {len(new_hero_map)} heroes, {len(new_matchup)} matchups")
+        # Load metadata.json if present
+        meta_path = os.path.join(target_dir, "metadata.json")
+        if not os.path.exists(meta_path):
+            meta_path = os.path.join(base_model_dir, "metadata.json")
+        disk_meta = {}
+        if os.path.exists(meta_path):
+            try:
+                with open(meta_path, "r", encoding="utf-8") as f:
+                    disk_meta = json.load(f)
+            except Exception as e:
+                log.warning(f"Failed to read metadata.json: {e}")
 
-        # Atomic swap
+        # Load heroes_metadata.json if present
+        heroes_meta_path = os.path.join(target_dir, "heroes_metadata.json")
+        if not os.path.exists(heroes_meta_path):
+            heroes_meta_path = os.path.join(base_model_dir, "heroes_metadata.json")
+        loaded_heroes_list = []
+        if os.path.exists(heroes_meta_path):
+            try:
+                with open(heroes_meta_path, "r", encoding="utf-8") as f:
+                    loaded_heroes_list = json.load(f)
+            except Exception as e:
+                log.warning(f"Failed to read heroes_metadata.json: {e}")
+
+        # Atomic state swap
         hero_map = new_hero_map
         matchup_matrix = new_matchup
         matchup_samples = new_matchup_samples
@@ -103,20 +151,41 @@ def load_models():
         sorted_hero_ids = sorted(list(hero_map.keys()))
         hero_to_idx = {h: i for i, h in enumerate(sorted_hero_ids)}
 
+        # Build fallback heroes_list if not loaded from file
+        if loaded_heroes_list:
+            heroes_list = loaded_heroes_list
+        else:
+            heroes_list = [
+                {
+                    "id": hid,
+                    "name": hname,
+                    "roles": get_roles(hid),
+                    "attribute": "all",
+                    "image_url": f"https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/{hname.lower().replace(' ', '_').replace('-', '')}.png",
+                    "icon_url": f"https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/icons/{hname.lower().replace(' ', '_').replace('-', '')}.png"
+                }
+                for hid, hname in sorted(hero_map.items(), key=lambda x: x[1])
+            ]
+
         model_metadata["status"] = "ready"
         model_metadata["loaded_at"] = datetime.datetime.now().isoformat()
+        model_metadata["model_path"] = target_dir
         model_metadata["files"] = temp_metadata["files"]
         model_metadata["combiner_weights"] = combiner_weights
+        if disk_meta:
+            model_metadata.update(disk_meta)
+
+        log.info(f"Loaded model version {model_metadata.get('version', 'unknown')} ({len(hero_map)} heroes, {len(matchup_matrix)} matchups)")
         return True
 
-    except RuntimeError as e:
-        log.error(str(e))
+    except Exception as e:
+        log.error(f"Error loading models: {e}", exc_info=True)
         model_metadata["status"] = "missing_core_files"
         model_metadata["error"] = str(e)
         return False
 
 
-# Load once on import
+# Load on import
 load_models()
 
 
@@ -125,7 +194,7 @@ def get_roles(hero_id: int) -> List[str]:
     return [x.lower() for x in (r if isinstance(r, list) else [r])]
 
 
-def resolve_hero_id(identifier: Any) -> Any:
+def resolve_hero_id(identifier: Any) -> Optional[int]:
     """Resolve hero name or numeric ID to valid integer hero ID."""
     if identifier is None:
         return None
@@ -266,10 +335,10 @@ def predict(hero_id: int, enemy_ids: List[int], ally_ids: List[int], engine: str
     wr = hero_winrate.get(hero_id, 0.50)
     w_diff = wr - 0.50
 
-    w_m = combiner_weights.get('matchup', 1.5644)
-    w_s = combiner_weights.get('synergy', 1.5201)
-    w_w = combiner_weights.get('winrate', 0.9665)
-    w_p = combiner_weights.get('model', 2.1890)
+    w_m = combiner_weights.get('matchup', 1.5604)
+    w_s = combiner_weights.get('synergy', 1.5120)
+    w_w = combiner_weights.get('winrate', 0.9607)
+    w_p = combiner_weights.get('model', 2.2110)
 
     if engine == "ml":
         return compute_model_win_prob(hero_id, enemy_ids, ally_ids)
@@ -320,7 +389,6 @@ def build_reasons_and_details(
         elif adj >= -0.005:
             neutral.append((ename, adj, sample_size, confidence))
 
-    # Prioritize high/medium confidence counters first, then win rate advantage
     def counter_sort_key(item):
         ename, adj, n_games, conf = item
         conf_rank = 2 if conf == "high" else (1 if conf == "medium" else 0)

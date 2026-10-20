@@ -162,8 +162,13 @@ def root():
 
 @app.get("/health")
 def health():
-    ready = scoring.model_metadata["status"] == "ready"
-    return {"status": "ok" if ready else scoring.model_metadata["status"], "heroes": len(scoring.hero_map)}
+    ready = scoring.model_metadata.get("status") == "ready"
+    return {
+        "status": "ok" if ready else scoring.model_metadata.get("status", "unknown"),
+        "heroes": len(scoring.hero_map),
+        "model_version": scoring.model_metadata.get("version", "unknown"),
+        "data_freshness": scoring.model_metadata.get("data_freshness", {}),
+    }
 
 
 @app.get("/model/status")
@@ -172,10 +177,14 @@ def model_status():
 
 
 @app.post("/model/reload")
-def model_reload():
-    success = scoring.load_models()
+def model_reload(version: str = None):
+    success = scoring.load_models(version=version)
     if success:
-        return {"status": "success", "metadata": scoring.model_metadata}
+        return {
+            "status": "success",
+            "version": scoring.model_metadata.get("version"),
+            "metadata": scoring.model_metadata
+        }
     else:
         raise HTTPException(500, detail="Failed to reload model files from disk.")
 
@@ -194,6 +203,8 @@ def debug():
 
 @app.get("/heroes")
 def heroes():
+    if scoring.heroes_list:
+        return scoring.heroes_list
     return scoring.hero_map
 
 

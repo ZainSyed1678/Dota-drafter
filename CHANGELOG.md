@@ -66,4 +66,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - Unknown hero detection: validates all hero inputs against loaded heroes, raising HTTP 422 with a clear error message.
   - Transparent dual input contract: seamlessly accepts both numeric Dota 2 hero IDs and string localized names.
 
+## [Phase 4 — Data Architecture, Hero Metadata & Model Versioning] - 2026-10-20
+
+### Added
+- `ml_pipeline/training_config.json`: Configuration for patch-aware recency decay rates and Empirical-Bayes shrinkage hyperparameters.
+- `backend/model/heroes_metadata.json`: Comprehensive canonical Dota 2 hero database (127 heroes) with numeric ID, localized name, short name, roles, primary attribute, and CDN image/icon URLs.
+- Model versioning pipeline in `ml_pipeline/train.py`: training runs now serialize artifacts directly to `backend/model/<version>/` (e.g. `v2.2.0/`) alongside `metadata.json` recording git commit hash, data freshness, hyperparameter config, and test evaluation metrics.
+
+### Changed
+- `backend/scoring.py`:
+  - Implemented automatic version discovery: scans `backend/model/` and loads the latest version by default.
+  - Added support for targeting specific model versions via `load_models(version=...)`.
+  - Added structured data freshness tracking in `model_metadata`.
+- `backend/main.py`:
+  - Updated `GET /heroes` to return full hero metadata (numeric ID, name, roles, attribute, CDN image URL).
+  - Updated `GET /health` to surface active model version and data freshness metrics.
+  - Added version parameter support to `POST /model/reload?version=...` for zero-downtime hot reloading.
+
+
 
