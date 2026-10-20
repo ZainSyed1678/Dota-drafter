@@ -141,6 +141,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - `backend/tests/` (superseded by canonical root `tests/`)
   - Legacy notebooks `notebooks/first.ipynb`, `second.ipynb`, `second.py` and old tracked pickle files.
 
+## [Phase 7 — Documentation & Polish] - 2026-10-20
+
+### Added
+- Complete rewrite of `Readme.md`:
+  - Accurate repo structure matching modularized codebase.
+  - Zero-leakage methodology and honest performance metrics matching `metrics.json`.
+  - Full ablation study results matching `ablation.md`.
+  - Clear explanation of the theoretical draft-prediction ceiling in Dota 2.
+  - Quickstart guide covering Docker Compose, local development, and Makefile targets.
+  - Comprehensive API documentation for `/heroes`, `/suggest`, and `/health`.
+  - Step-by-step retraining guide.
+  - Valve Corporation trademark acknowledgment.
+- Methodology documentation: `docs/METHOD.md` formalizing zero-leakage temporal splitting, empirical-Bayes Beta-prior shrinkage, exponential recency weighting, and the stacking logistic combiner.
+- Open-source MIT License: `LICENSE`.
+
+
 
 
 
