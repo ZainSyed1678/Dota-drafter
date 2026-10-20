@@ -83,5 +83,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - Updated `GET /health` to surface active model version and data freshness metrics.
   - Added version parameter support to `POST /model/reload?version=...` for zero-downtime hot reloading.
 
+## [Phase 5 — Backend & Frontend Quality, Caching & Polish] - 2026-10-20
+
+### Added
+- Backend modularization under `backend/app/`:
+  - `app/config.py`: Centralized environment configuration via Pydantic BaseSettings (CORS, port, debug, prediction engine).
+  - `app/logger.py`: Structured JSON logging with contextual metadata.
+  - `app/schemas.py`: Pydantic request and response schemas with strict draft validations.
+  - `app/model_loader.py`: Isolated model lifecycle and multi-version artifact management.
+  - `app/scoring.py`: Matchup, synergy, tree-model inference, and tactical explanation generation.
+  - `app/cache.py`: Thread-safe LRU response caching for identical draft suggestions.
+  - `app/routes/`: Organized route subpackages (`draft.py`, `heroes.py`, `health.py`).
+- Frontend features in `frontend/src/Dota2Drafter.jsx`:
+  - Dynamic hero ingestion from `GET /heroes` with local fallback.
+  - Ban selection UI with dedicated ban dock and selection tags.
+  - Role filter pills (All, Carry, Mid, Offlane, Support) and Role-Aware Auto-Fill toggle.
+  - Suggestion card confidence badges (`HIGH CONFIDENCE`, `MEDIUM CONFIDENCE`, `LOW CONFIDENCE`) and sample sizes.
+  - Comprehensive loading indicators and error recovery with retry.
+  - Data freshness footer displaying live patch, match count, model version, and zero-leakage guarantee.
+  - Full mobile viewport responsiveness with floating bottom action dock.
+- Environment variables documentation: added `.env.example` in repo root and `backend/.env.example`.
+
+
 
 

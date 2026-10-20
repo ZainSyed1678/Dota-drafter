@@ -1,0 +1,4 @@
+"""Dota 2 Drafter Backend Application Package"""
+from app.main import app
+
+__all__ = ["app"]
