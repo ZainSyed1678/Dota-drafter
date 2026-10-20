@@ -497,7 +497,8 @@ export default function Dota2Drafter() {
       });
       if (!res.ok) {
         const errJson = await res.json().catch(() => ({}));
-        const msg = errJson.message || errJson.detail || `Server error (${res.status})`;
+        const details = Array.isArray(errJson.details) ? ` - ${errJson.details.join("; ")}` : "";
+        const msg = (errJson.message || errJson.detail || `Server error (${res.status})`) + details;
         throw new Error(msg);
       }
       const data = await res.json();
