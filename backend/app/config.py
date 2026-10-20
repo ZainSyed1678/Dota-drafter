@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     DATABASE_URL: Optional[str] = None
     PREDICTION_ENGINE: str = "combined"  # "combined", "ml", or "heuristic"
     TELEGRAM_TOKEN: Optional[str] = None
+    ENABLE_EMBEDDED_BOT: bool = True
     ADMIN_API_KEY: Optional[str] = None
 
     CORS_ORIGINS: List[str] = ["*"]

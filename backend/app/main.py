@@ -161,7 +161,7 @@ def metrics():
 @app.on_event("startup")
 def startup_event():
     token = settings.TELEGRAM_TOKEN
-    if token:
+    if token and settings.ENABLE_EMBEDDED_BOT:
         try:
             from bot_service import start_bot_thread
             start_bot_thread(token)

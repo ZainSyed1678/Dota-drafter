@@ -1,6 +1,7 @@
 import os
-import telebot
+
 import requests
+import telebot
 
 try:
     from dotenv import load_dotenv
@@ -65,26 +66,26 @@ def send_welcome(message):
 @bot.message_handler(commands=['stats'])
 def check_stats(message):
     bot.reply_to(message, "🔍 Grog inspecting system pulse...")
-    
+
     # 1. Total Requests
     total_req_res = query_prometheus("sum(dota_api_requests_total) or vector(0)")
     total_req = total_req_res[0]["value"][1] if total_req_res else "0"
-    
+
     # 2. Hero count
     hero_res = query_prometheus("dota_loaded_heroes_total")
     heroes_count = hero_res[0]["value"][1] if hero_res else "N/A"
-    
+
     # 3. Active engine
     engine_res = query_prometheus("dota_active_prediction_engine")
     if engine_res:
         engine_str = "XGBoost (ML)" if float(engine_res[0]["value"][1]) == 1.0 else "Heuristics (Math)"
     else:
         engine_str = "Unknown"
-        
+
     # 4. Latency p50
     p50_res = query_prometheus("histogram_quantile(0.50, sum(rate(dota_request_latency_seconds_bucket[5m])) by (le)) * 1000")
     p50_ms = f"{float(p50_res[0]['value'][1]):.1f} ms" if p50_res and p50_res[0]['value'][1] != "NaN" else "< 10 ms"
-    
+
     # 5. Backend Model Status
     backend_status = "UNKNOWN"
     try:
@@ -110,7 +111,7 @@ def check_stats(message):
 @bot.message_handler(commands=['api_stats'])
 def check_api_stats(message):
     bot.reply_to(message, "⚡ Grog gathering API performance numbers...")
-    
+
     # Request count by endpoint
     req_by_ep = query_prometheus("sum by (endpoint) (dota_api_requests_total)")
     # HTTP status code counts
@@ -118,7 +119,7 @@ def check_api_stats(message):
     # Latencies
     p50_res = query_prometheus("histogram_quantile(0.50, sum(rate(dota_request_latency_seconds_bucket[5m])) by (le)) * 1000")
     p95_res = query_prometheus("histogram_quantile(0.95, sum(rate(dota_request_latency_seconds_bucket[5m])) by (le)) * 1000")
-    
+
     p50 = f"{float(p50_res[0]['value'][1]):.1f} ms" if p50_res and p50_res[0]['value'][1] != "NaN" else "< 10 ms"
     p95 = f"{float(p95_res[0]['value'][1]):.1f} ms" if p95_res and p95_res[0]['value'][1] != "NaN" else "< 25 ms"
 
@@ -164,13 +165,13 @@ def check_model_stats(message):
             status = data.get("status", "unknown")
             loaded = data.get("loaded_at", "never")
             files = data.get("files", {})
-            
+
             file_lines = []
             for name, meta in files.items():
                 size_kb = meta.get("size_bytes", 0) / 1024
                 mtime = meta.get("modified_at", "").split("T")[0]
                 file_lines.append(f"• `{name}`: {size_kb:.1f} KB ({mtime})")
-                
+
             text = (
                 "🧠 *Model Registry Metadata*\n"
                 "━━━━━━━━━━━━━━━━━━━━━\n"
@@ -190,16 +191,16 @@ def check_model_stats(message):
 @bot.message_handler(commands=['health'])
 def check_health(message):
     bot.reply_to(message, "🏥 Grog pinging all village huts (health check)...")
-    
+
     checks = []
-    
+
     # 1. Backend
     try:
         r = requests.get(f"{BACKEND_URL}/health", timeout=2)
         checks.append(("Backend API", "🟢 UP" if r.status_code == 200 else f"🔴 {r.status_code}"))
     except Exception:
         checks.append(("Backend API", "🔴 DOWN"))
-        
+
     # 2. Prometheus
     try:
         r = requests.get(f"{PROMETHEUS_URL}/-/healthy", timeout=2)
@@ -233,7 +234,7 @@ def check_health(message):
         checks.append(("PostgreSQL", "🔴 DOWN"))
 
     lines = [f"• *{name}:* {status}" for name, status in checks]
-    
+
     report = (
         "🏥 *Infrastructure Health Pulse*\n"
         "━━━━━━━━━━━━━━━━━━━━━\n"
@@ -262,12 +263,12 @@ def check_hero(message):
         if not hero_query:
             bot.reply_to(message, "Ugh! Tell Grog which hero! Example: `/hero Sven` or `/hero Pudge`", parse_mode="Markdown")
             return
-        
+
         bot.reply_to(message, f"🔍 Grog searching Vector Brain for *{hero_query}*...", parse_mode="Markdown")
         client, embedding_model = get_qdrant_and_embedder()
-        
+
         query_norm = hero_query.lower().strip().replace("-", " ")
-        
+
         # 1. First try payload scroll match for exact/partial hero name
         scroll_res, _ = client.scroll(
             collection_name="patch_notes",
@@ -275,10 +276,10 @@ def check_hero(message):
             with_payload=True,
             with_vectors=False
         )
-        
+
         best_match = None
         for point in scroll_res:
-            h_name = point.payload.get("hero", "")
+            point.payload.get("hero", "")
             h_lower = point.payload.get("hero_lower", "").replace("-", " ")
             if query_norm == h_lower:
                 best_match = point.payload.get("text", "")
@@ -304,10 +305,26 @@ def check_hero(message):
             bot.reply_to(message, f"📜 *Patch Notes Update:*\n\n{best_match}", parse_mode="Markdown")
         else:
             bot.reply_to(message, f"❌ Grog could not find any patch notes for '{hero_query}'. Check spelling!")
-            
+
     except Exception as e:
         bot.reply_to(message, f"Grog's brain hurts: {e}")
 
 if __name__ == "__main__":
     print("Grog Bot waking up...")
-    bot.infinity_polling()
+    import time
+    try:
+        bot.remove_webhook()
+    except Exception:
+        pass
+
+    while True:
+        try:
+            bot.infinity_polling(skip_pending=True, timeout=20, long_polling_timeout=20)
+        except Exception as e:
+            err_str = str(e)
+            if "409" in err_str or "Conflict" in err_str:
+                print("Telegram Bot 409 Conflict: another instance is running. Backing off for 60s...")
+                time.sleep(60)
+            else:
+                print(f"Grog Bot polling error: {e}. Retrying in 5s...")
+                time.sleep(5)

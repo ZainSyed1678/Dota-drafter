@@ -215,6 +215,11 @@ def start_bot_thread(token: str):
             try:
                 bot.infinity_polling(skip_pending=True, timeout=20, long_polling_timeout=20)
             except Exception as e:
+                err_str = str(e)
+                if "409" in err_str or "Conflict" in err_str:
+                    print("Telegram Bot 409 Conflict: another instance is running. Backing off for 60s...")
+                    time.sleep(60)
+                    continue
                 print(f"Telegram Bot polling error (will retry in 5s): {e}")
                 time.sleep(5)
 
