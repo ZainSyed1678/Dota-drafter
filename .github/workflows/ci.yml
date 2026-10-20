@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ "main", "Production-attempt" ]
+    branches: [ "main" ]
   pull_request:
-    branches: [ "main", "Production-attempt" ]
+    branches: [ "main" ]
   workflow_dispatch:
 
 jobs:
@@ -54,7 +54,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: frontend
-        run: npm ci
+        run: npm install
 
       - name: Build frontend
         working-directory: frontend

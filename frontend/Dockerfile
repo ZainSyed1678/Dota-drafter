@@ -5,7 +5,7 @@ WORKDIR /app
 
 # Copy package files and install deps first (cached layer)
 COPY package.json package-lock.json* ./
-RUN npm ci
+RUN npm install
 
 # Inject API URL at build time
 ARG VITE_API_URL=http://localhost:8000
