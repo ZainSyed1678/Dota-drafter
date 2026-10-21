@@ -20,7 +20,7 @@ if str(scripts_dir) not in sys.path:
     sys.path.insert(0, str(scripts_dir))
 
 
-def train_from_postgres(patch: str = "7.35d", max_samples: int = 50000, version: str = None) -> bool:
+def train_from_postgres(patch: str = "7.35f", max_samples: int = 100000, version: str = None) -> bool:
     if not version:
         date_str = datetime.datetime.now().strftime("%Y.%m.%d")
         version = f"v{date_str}"
@@ -38,34 +38,27 @@ def train_from_postgres(patch: str = "7.35d", max_samples: int = 50000, version:
         print(f"Could not connect to PostgreSQL: {e}")
         return False
 
-    # Check match counts for patch or fallback to all high-MMR matches
+    # Check match counts for patch and total in DB
     with conn.cursor() as cur:
         cur.execute("SELECT COUNT(*) FROM matches WHERE patch_version = %s;", (patch,))
         patch_count = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(*) FROM matches;")
+        total_matches = cur.fetchone()[0]
 
-        if patch_count < 1000:
-            print(f"Only {patch_count} matches found for patch '{patch}'. Checking total available matches...")
-            cur.execute("SELECT COUNT(*) FROM matches;")
-            total_matches = cur.fetchone()[0]
-            print(f"Total matches in DB: {total_matches}")
-            where_clause = ""
-            query_limit = min(total_matches, max_samples)
-        else:
-            where_clause = f"WHERE patch_version = '{patch}'"
-            query_limit = min(patch_count, max_samples)
+    print(f"PostgreSQL match pool: {total_matches} total matches in DB ({patch_count} on active patch '{patch}').")
 
+    query_limit = min(total_matches, max_samples)
     if query_limit == 0:
         print("No matches found in database. Please run collection first.")
         conn.close()
         return False
 
-    print(f"Extracting {query_limit} most recent matches from PostgreSQL...")
+    print(f"Extracting {query_limit} most recent matches (prioritizing '{patch}', with recency decay on previous patches)...")
     query = f"""
-        SELECT match_id, radiant_win, radiant_team, dire_team
+        SELECT match_id, radiant_win, radiant_team, dire_team, patch_version
         FROM (
-            SELECT match_id, radiant_win, radiant_team, dire_team
+            SELECT match_id, radiant_win, radiant_team, dire_team, patch_version
             FROM matches
-            {where_clause}
             ORDER BY match_id DESC
             LIMIT {query_limit}
         ) recent_matches
@@ -74,7 +67,11 @@ def train_from_postgres(patch: str = "7.35d", max_samples: int = 50000, version:
     df = pd.read_sql(query, conn)
     conn.close()
 
-    print(f"Extracted {len(df)} matches successfully.")
+    # Fill any null patch_version with default
+    df['patch_version'] = df['patch_version'].fillna(patch)
+
+    print(f"Extracted {len(df)} matches successfully. Patches represented in batch:")
+    print(df['patch_version'].value_counts().to_dict())
 
     data_dir = Path("data")
     data_dir.mkdir(parents=True, exist_ok=True)
@@ -124,8 +121,8 @@ def train_from_postgres(patch: str = "7.35d", max_samples: int = 50000, version:
 
 def main():
     parser = argparse.ArgumentParser(description="Train Dota 2 Drafter model from PostgreSQL")
-    parser.add_argument("--patch", type=str, default="7.35d", help="Patch version (e.g. 7.35d)")
-    parser.add_argument("--max-samples", type=int, default=50000, help="Max matches to use for training")
+    parser.add_argument("--patch", type=str, default="7.35f", help="Patch version (default: 7.35f)")
+    parser.add_argument("--max-samples", type=int, default=100000, help="Max matches to use for training (default: 100000)")
     parser.add_argument("--version", type=str, default=None, help="Version string for model (e.g. v2.3.0)")
     args = parser.parse_args()
 

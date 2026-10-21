@@ -36,6 +36,64 @@ def model_status():
     return store.metadata
 
 
+@router.get("/database/stats")
+def database_stats():
+    import psycopg2
+    db_url = settings.DATABASE_URL
+    if not db_url:
+        return {"status": "no_database_url", "message": "DATABASE_URL not configured"}
+
+    try:
+        conn = psycopg2.connect(db_url, connect_timeout=5)
+        with conn.cursor() as cur:
+            cur.execute("SELECT COUNT(*), COALESCE(MAX(match_id), 0) FROM matches;")
+            total_matches, max_match_id = cur.fetchone()
+
+            cur.execute("SELECT COALESCE(patch_version, 'unknown'), COUNT(*) FROM matches GROUP BY patch_version ORDER BY COUNT(*) DESC;")
+            patch_counts = dict(cur.fetchall())
+
+            cur.execute("""
+                SELECT patch_version, start_time, end_time, matches_fetched, matches_inserted, status
+                FROM collection_runs ORDER BY id DESC LIMIT 1;
+            """)
+            run_row = cur.fetchone()
+            latest_run = None
+            if run_row:
+                latest_run = {
+                    "patch_version": run_row[0],
+                    "start_time": run_row[1].isoformat() if run_row[1] else None,
+                    "end_time": run_row[2].isoformat() if run_row[2] else None,
+                    "matches_fetched": run_row[3],
+                    "matches_inserted": run_row[4],
+                    "status": run_row[5],
+                }
+
+        conn.close()
+
+        freshness = store.metadata.get("data_freshness", {})
+        model_latest_match_id = freshness.get("latest_match_id", 0)
+        unretrained = max(0, max_match_id - model_latest_match_id) if (max_match_id and model_latest_match_id) else 0
+
+        return {
+            "status": "ok",
+            "total_matches": total_matches,
+            "max_match_id": max_match_id,
+            "patch_distribution": patch_counts,
+            "latest_run": latest_run,
+            "model_freshness": {
+                "version": store.metadata.get("version"),
+                "latest_patch": freshness.get("latest_patch"),
+                "model_trained_matches": freshness.get("match_count"),
+                "model_latest_match_id": model_latest_match_id,
+                "db_latest_match_id": max_match_id,
+                "is_up_to_date": (max_match_id <= model_latest_match_id) if model_latest_match_id else False,
+                "unretrained_match_estimate": unretrained,
+            }
+        }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
 @router.post("/model/reload")
 def model_reload(version: Optional[str] = None, x_admin_key: Optional[str] = Header(None)):
     if settings.ADMIN_API_KEY and x_admin_key != settings.ADMIN_API_KEY:

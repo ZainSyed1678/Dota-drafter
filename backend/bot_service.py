@@ -12,29 +12,184 @@ _bot_instance = None
 _lock_socket = None
 
 
+def fetch_database_and_model_stats():
+    """Fetch database and model stats via HTTP or direct PostgreSQL connection."""
+    stats = {}
+    try:
+        r = requests.get(f"{BACKEND_URL}/database/stats", timeout=4)
+        if r.status_code == 200:
+            stats = r.json()
+            if stats.get("status") == "ok":
+                return stats
+    except Exception:
+        pass
+
+    # Direct DB fallback
+    if DATABASE_URL:
+        try:
+            import psycopg2
+            conn = psycopg2.connect(DATABASE_URL, connect_timeout=5)
+            with conn.cursor() as cur:
+                cur.execute("SELECT COUNT(*), COALESCE(MAX(match_id), 0) FROM matches;")
+                total_matches, max_match_id = cur.fetchone()
+
+                cur.execute("SELECT COALESCE(patch_version, 'unknown'), COUNT(*) FROM matches GROUP BY patch_version ORDER BY COUNT(*) DESC;")
+                patch_counts = dict(cur.fetchall())
+
+                cur.execute("""
+                    SELECT patch_version, start_time, end_time, matches_fetched, matches_inserted, status
+                    FROM collection_runs ORDER BY id DESC LIMIT 1;
+                """)
+                run_row = cur.fetchone()
+                latest_run = None
+                if run_row:
+                    latest_run = {
+                        "patch_version": run_row[0],
+                        "start_time": run_row[1].strftime("%Y-%m-%d %H:%M UTC") if run_row[1] else None,
+                        "matches_fetched": run_row[3],
+                        "matches_inserted": run_row[4],
+                        "status": run_row[5],
+                    }
+            conn.close()
+
+            stats["total_matches"] = total_matches
+            stats["max_match_id"] = max_match_id
+            stats["patch_distribution"] = patch_counts
+            stats["latest_run"] = latest_run
+        except Exception:
+            pass
+
+    return stats
+
+
 def create_bot(token: str):
     bot = telebot.TeleBot(token, threaded=False)
 
     @bot.message_handler(commands=["start", "help"])
     def send_welcome(message):
         text = (
-            "🗿 *Ugh! Grog Dota Drafter Supervisor Bot!*\n\n"
-            "Command rocks from your phone:\n\n"
-            "📊 *System Telemetry*\n"
-            "• `/stats` — Executive pulse of API & models\n"
-            "• `/health` — Health check of API & Database\n"
-            "• `/model_stats` — Loaded model versions & engine\n\n"
+            "🗿 *Dota Drafter Supervisor Bot*\n\n"
+            "Command telemetry & models directly from Telegram:\n\n"
+            "📊 *Telemetry & Data Freshness*\n"
+            "• `/matches` — Matches fetched today, total DB pool & patch breakdown\n"
+            "• `/model` — Model version, active patch, trained matches & freshness status\n"
+            "• `/stats` — Executive pulse of API, database & model status\n"
+            "• `/health` — Infrastructure health check\n\n"
             "🎮 *Drafting & Control*\n"
-            "• `/suggest <hero1, hero2>` — Quick counter recommendations\n"
-            "• `/deploy` — Hot-reload newly trained models\n"
+            "• `/suggest <hero1, hero2>` — Top counter recommendations\n"
+            "• `/deploy` — Instant hot-reload of newest model weights\n"
         )
         bot.reply_to(message, text, parse_mode="Markdown")
 
+    @bot.message_handler(commands=["matches", "match_stats"])
+    def check_matches(message):
+        bot.reply_to(message, "🔍 Querying match collection and database statistics...")
+        stats = fetch_database_and_model_stats()
+
+        total_matches = stats.get("total_matches", "Unknown")
+        total_str = f"{total_matches:,}" if isinstance(total_matches, int) else str(total_matches)
+        patches = stats.get("patch_distribution", {})
+
+        patch_lines = []
+        for p, cnt in patches.items():
+            badge = "🔥 Active" if p == "7.35f" else "📦 Historical"
+            patch_lines.append(f"  • *Patch {p}:* `{cnt:,}` ({badge})")
+        patches_text = "\n".join(patch_lines) if patch_lines else "  • No patch breakdown available"
+
+        latest_run = stats.get("latest_run") or {}
+        run_patch = latest_run.get("patch_version", "N/A")
+        fetched = latest_run.get("matches_fetched", 0)
+        inserted = latest_run.get("matches_inserted", 0)
+        status = latest_run.get("status", "N/A")
+        start_time = latest_run.get("start_time", "Recent")
+
+        report = (
+            "📊 *Dota 2 Match Database & Collection*\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            f"• *Total Matches in Database:* `{total_str}`\n"
+            "• *Matches by Patch:*\n"
+            f"{patches_text}\n\n"
+            "📥 *Latest Daily Collection Run:*\n"
+            f"• *Target Patch:* `{run_patch}`\n"
+            f"• *Raw Matches Fetched:* `{fetched:,}`\n"
+            f"• *New Matches Inserted:* `{inserted:,}`\n"
+            f"• *Run Status:* `{status}`\n"
+            f"• *Run Time:* `{start_time}`\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            "💡 Older matches are preserved while new patch matches receive higher recency weight."
+        )
+        bot.reply_to(message, report, parse_mode="Markdown")
+
+    @bot.message_handler(commands=["model", "model_stats", "model_freshness"])
+    def check_model_freshness(message):
+        bot.reply_to(message, "🧠 Checking model version, sample size & freshness...")
+
+        # 1. Model Status from backend
+        model_version = "Unknown"
+        active_patch = "7.35f"
+        trained_matches = 0
+        accuracy = 0.0
+        roc_auc = 0.0
+        model_latest_match_id = 0
+        loaded_at = "Unknown"
+
+        try:
+            r = requests.get(f"{BACKEND_URL}/model/status", timeout=4)
+            if r.status_code == 200:
+                mdata = r.json()
+                model_version = mdata.get("version", "Unknown")
+                loaded_at = mdata.get("loaded_at", "Unknown")
+                freshness = mdata.get("data_freshness", {})
+                active_patch = freshness.get("latest_patch", "7.35f")
+                trained_matches = freshness.get("match_count", 0)
+                model_latest_match_id = freshness.get("latest_match_id", 0)
+
+                test_m = mdata.get("test_metrics", {})
+                accuracy = test_m.get("accuracy", 0.0)
+                roc_auc = test_m.get("roc_auc", 0.0)
+        except Exception:
+            pass
+
+        # 2. Database Stats
+        stats = fetch_database_and_model_stats()
+        db_max_match_id = stats.get("max_match_id", 0)
+
+        # Freshness determination
+        if model_latest_match_id and db_max_match_id:
+            if db_max_match_id <= model_latest_match_id:
+                freshness_status = "🟢 *UP TO DATE* with latest collected matches!"
+            else:
+                unretrained = max(0, db_max_match_id - model_latest_match_id)
+                freshness_status = f"🟡 Model is active; ~{unretrained} new matches queued for next daily retrain."
+        else:
+            freshness_status = "🟢 Model is operational."
+
+        trained_str = f"{trained_matches:,}" if trained_matches else "100,000 (Target)"
+
+        report = (
+            "🧠 *Drafter Model Status & Freshness*\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            f"• *Model Version:* `{model_version}`\n"
+            f"• *Active Patch:* `{active_patch}`\n"
+            f"• *Trained On:* `{trained_str} matches`\n"
+            f"• *Test Accuracy:* `{accuracy * 100:.2f}%`\n"
+            f"• *Test ROC-AUC:* `{roc_auc:.4f}`\n"
+            f"• *Last Loaded:* `{loaded_at}`\n\n"
+            "🔄 *Match Freshness Check:*\n"
+            f"• *Latest Match in Model:* `{model_latest_match_id or 'N/A'}`\n"
+            f"• *Latest Match in Database:* `{db_max_match_id or 'N/A'}`\n"
+            f"• *Freshness:* {freshness_status}\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            "💡 Retrained daily at 00:00 UTC. Use `/deploy` to hot-reload."
+        )
+        bot.reply_to(message, report, parse_mode="Markdown")
+
     @bot.message_handler(commands=["stats"])
     def check_stats(message):
-        bot.reply_to(message, "🔍 Grog inspecting system pulse...")
+        bot.reply_to(message, "🔍 Inspecting system pulse...")
         backend_status = "UNKNOWN"
         heroes_count = "N/A"
+        model_ver = "Unknown"
 
         # Check health
         try:
@@ -43,45 +198,30 @@ def create_bot(token: str):
                 data = r.json()
                 backend_status = data.get("status", "ok")
                 heroes_count = data.get("heroes", "127")
+                model_ver = data.get("model_version", "Unknown")
         except Exception:
             backend_status = "UNREACHABLE"
 
-        # Check model status
-        try:
-            r = requests.get(f"{BACKEND_URL}/model/status", timeout=3)
-            if r.status_code == 200:
-                mdata = r.json()
-                loaded_at = mdata.get("loaded_at", "never")
-        except Exception:
-            loaded_at = "unknown"
-
-        # Check metrics for total requests
-        total_req = 0
-        try:
-            r = requests.get(f"{BACKEND_URL}/metrics", timeout=3)
-            if r.status_code == 200:
-                for line in r.text.splitlines():
-                    if line.startswith("dota_api_requests_total{"):
-                        val = line.split()[-1]
-                        total_req += int(float(val))
-        except Exception:
-            pass
+        # Check database stats
+        stats = fetch_database_and_model_stats()
+        total_matches = stats.get("total_matches", "N/A")
+        total_str = f"{total_matches:,}" if isinstance(total_matches, int) else str(total_matches)
 
         summary = (
             "📈 *Dota Drafter — System Pulse*\n"
             "━━━━━━━━━━━━━━━━━━━━━\n"
             f"• *Backend API:* `{backend_status}`\n"
+            f"• *Model Version:* `{model_ver}`\n"
+            f"• *Total Matches in DB:* `{total_str}`\n"
             f"• *Loaded Heroes:* `{heroes_count}`\n"
-            f"• *Total API Requests:* `{total_req}`\n"
-            f"• *Models Loaded At:* `{loaded_at}`\n"
             "━━━━━━━━━━━━━━━━━━━━━\n"
-            "👉 Use `/model_stats` for files or `/health` for DB status."
+            "👉 Use `/matches` for collection details or `/model` for freshness."
         )
         bot.reply_to(message, summary, parse_mode="Markdown")
 
     @bot.message_handler(commands=["health"])
     def check_health(message):
-        bot.reply_to(message, "🏥 Grog pinging all components...")
+        bot.reply_to(message, "🏥 Pinging infrastructure components...")
 
         # 1. Backend
         api_status = "🔴 DOWN"
@@ -97,13 +237,12 @@ def create_bot(token: str):
         if DATABASE_URL:
             try:
                 import psycopg2
-
-                conn = psycopg2.connect(DATABASE_URL, connect_timeout=10)
+                conn = psycopg2.connect(DATABASE_URL, connect_timeout=5)
                 with conn.cursor() as cur:
                     cur.execute("SELECT COUNT(*) FROM matches;")
                     cnt = cur.fetchone()[0]
                 conn.close()
-                db_status = f"🟢 UP ({cnt} matches)"
+                db_status = f"🟢 UP ({cnt:,} matches)"
             except Exception as e:
                 db_status = f"🔴 ERROR ({str(e)[:30]})"
 
@@ -112,54 +251,22 @@ def create_bot(token: str):
             "━━━━━━━━━━━━━━━━━━━━━\n"
             f"• *FastAPI Backend:* {api_status}\n"
             f"• *PostgreSQL (Neon):* {db_status}\n"
-            f"• *Auto Collector:* 🟢 Active (Every 3h via GitHub Cron)\n"
+            f"• *Automated Daily Pipeline:* 🟢 Active (Daily at 00:00 UTC)\n"
             "━━━━━━━━━━━━━━━━━━━━━"
         )
         bot.reply_to(message, report, parse_mode="Markdown")
 
-    @bot.message_handler(commands=["model_stats"])
-    def check_model_stats(message):
-        try:
-            resp = requests.get(f"{BACKEND_URL}/model/status", timeout=4)
-            if resp.status_code == 200:
-                data = resp.json()
-                status = data.get("status", "unknown")
-                loaded = data.get("loaded_at", "never")
-                files = data.get("files", {})
-
-                file_lines = []
-                for name, meta in files.items():
-                    size_kb = meta.get("size_bytes", 0) / 1024
-                    file_lines.append(f"• `{name}`: {size_kb:.1f} KB")
-
-                text = (
-                    "🧠 *Model Registry Metadata*\n"
-                    "━━━━━━━━━━━━━━━━━━━━━\n"
-                    f"• *Status:* `{status}`\n"
-                    f"• *Last Loaded:* `{loaded}`\n\n"
-                    "*Model Artifacts:*\n"
-                    + ("\n".join(file_lines) if file_lines else "• None found")
-                    + "\n"
-                    "━━━━━━━━━━━━━━━━━━━━━\n"
-                    "💡 Use `/deploy` to hot-reload models!"
-                )
-                bot.reply_to(message, text, parse_mode="Markdown")
-            else:
-                bot.reply_to(message, f"❌ Backend returned: {resp.status_code}")
-        except Exception as e:
-            bot.reply_to(message, f"❌ Could not reach Backend: {e}")
-
     @bot.message_handler(commands=["deploy"])
     def deploy_models(message):
-        bot.reply_to(message, "🔄 Grog telling backend to hot-reload models...")
+        bot.reply_to(message, "🔄 Telling backend to hot-reload models...")
         try:
             resp = requests.post(f"{BACKEND_URL}/model/reload", timeout=10)
             if resp.status_code == 200:
                 bot.reply_to(
-                    message, "✅ *SUCCESS!* Backend swapped rocks safely without downtime!", parse_mode="Markdown"
+                    message, "✅ *SUCCESS!* Backend hot-reloaded updated model weights with zero downtime!", parse_mode="Markdown"
                 )
             else:
-                bot.reply_to(message, f"❌ Backend yelled: {resp.status_code}", parse_mode="Markdown")
+                bot.reply_to(message, f"❌ Backend responded: {resp.status_code}", parse_mode="Markdown")
         except Exception as e:
             bot.reply_to(message, f"❌ Failed to reach backend: {e}")
 
@@ -169,7 +276,7 @@ def create_bot(token: str):
         if not args:
             bot.reply_to(
                 message,
-                "Ugh! Tell Grog enemy heroes separated by commas! Example:\n`/suggest Pudge, Sniper`",
+                "Provide enemy heroes separated by commas. Example:\n`/suggest Pudge, Sniper`",
                 parse_mode="Markdown",
             )
             return

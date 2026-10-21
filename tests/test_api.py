@@ -33,6 +33,14 @@ def test_health_endpoint():
     assert "match_count" in data["data_freshness"]
 
 
+def test_database_stats_endpoint():
+    res = client.get('/database/stats')
+    assert res.status_code == 200
+    data = res.json()
+    assert 'status' in data
+    assert 'model_freshness' in data
+
+
 def test_heroes_endpoint():
     res = client.get("/heroes")
     assert res.status_code == 200

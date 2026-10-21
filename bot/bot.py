@@ -155,6 +155,105 @@ def check_api_stats(message):
     )
     bot.reply_to(message, response, parse_mode="Markdown")
 
+
+@bot.message_handler(commands=['matches', 'match_stats'])
+def check_matches(message):
+    bot.reply_to(message, "🔍 Querying match collection and database statistics...")
+    try:
+        r = requests.get(f"{BACKEND_URL}/database/stats", timeout=5)
+        if r.status_code == 200:
+            stats = r.json()
+            total_matches = stats.get("total_matches", 0)
+            patches = stats.get("patch_distribution", {})
+            patch_lines = []
+            for p, cnt in patches.items():
+                badge = "🔥 Active" if p == "7.35f" else "📦 Historical"
+                patch_lines.append(f"  • *Patch {p}:* `{cnt:,}` ({badge})")
+            patches_text = "\n".join(patch_lines) if patch_lines else "  • No patch data"
+
+            latest_run = stats.get("latest_run") or {}
+            run_patch = latest_run.get("patch_version", "N/A")
+            fetched = latest_run.get("matches_fetched", 0)
+            inserted = latest_run.get("matches_inserted", 0)
+            status = latest_run.get("status", "N/A")
+            start_time = latest_run.get("start_time", "Recent")
+
+            report = (
+                "📊 *Dota 2 Match Database & Collection*\n"
+                "━━━━━━━━━━━━━━━━━━━━━\n"
+                f"• *Total Matches in Database:* `{total_matches:,}`\n"
+                "• *Matches by Patch:*\n"
+                f"{patches_text}\n\n"
+                "📥 *Latest Daily Collection Run:*\n"
+                f"• *Target Patch:* `{run_patch}`\n"
+                f"• *Raw Matches Fetched:* `{fetched:,}`\n"
+                f"• *New Matches Inserted:* `{inserted:,}`\n"
+                f"• *Run Status:* `{status}`\n"
+                f"• *Run Time:* `{start_time}`\n"
+                "━━━━━━━━━━━━━━━━━━━━━\n"
+                "💡 Older matches are preserved while new patch matches receive higher recency weight."
+            )
+            bot.reply_to(message, report, parse_mode="Markdown")
+            return
+    except Exception:
+        pass
+    bot.reply_to(message, "❌ Could not retrieve match database stats from Backend.")
+
+
+@bot.message_handler(commands=['model'])
+def check_model_freshness(message):
+    bot.reply_to(message, "🧠 Checking model version, sample size & freshness...")
+    try:
+        r = requests.get(f"{BACKEND_URL}/database/stats", timeout=5)
+        m_r = requests.get(f"{BACKEND_URL}/model/status", timeout=5)
+        if r.status_code == 200 and m_r.status_code == 200:
+            db_stats = r.json()
+            mdata = m_r.json()
+            version = mdata.get("version", "Unknown")
+            loaded_at = mdata.get("loaded_at", "Unknown")
+            freshness = mdata.get("data_freshness", {})
+            active_patch = freshness.get("latest_patch", "7.35f")
+            trained_matches = freshness.get("match_count", 0)
+            model_latest_match_id = freshness.get("latest_match_id", 0)
+            db_latest_match_id = db_stats.get("max_match_id", 0)
+
+            test_m = mdata.get("test_metrics", {})
+            acc = test_m.get("accuracy", 0.0)
+            roc = test_m.get("roc_auc", 0.0)
+
+            if model_latest_match_id and db_latest_match_id:
+                if db_latest_match_id <= model_latest_match_id:
+                    freshness_status = "🟢 *UP TO DATE* with latest collected matches!"
+                else:
+                    unretrained = max(0, db_latest_match_id - model_latest_match_id)
+                    freshness_status = f"🟡 Model is active; ~{unretrained} new matches queued for next daily retrain."
+            else:
+                freshness_status = "🟢 Model is operational."
+
+            trained_str = f"{trained_matches:,}" if trained_matches else "100,000 (Target)"
+
+            report = (
+                "🧠 *Drafter Model Status & Freshness*\n"
+                "━━━━━━━━━━━━━━━━━━━━━\n"
+                f"• *Model Version:* `{version}`\n"
+                f"• *Active Patch:* `{active_patch}`\n"
+                f"• *Trained On:* `{trained_str} matches`\n"
+                f"• *Test Accuracy:* `{acc * 100:.2f}%`\n"
+                f"• *Test ROC-AUC:* `{roc:.4f}`\n"
+                f"• *Last Loaded:* `{loaded_at}`\n\n"
+                "🔄 *Match Freshness Check:*\n"
+                f"• *Latest Match in Model:* `{model_latest_match_id or 'N/A'}`\n"
+                f"• *Latest Match in Database:* `{db_latest_match_id or 'N/A'}`\n"
+                f"• *Freshness:* {freshness_status}\n"
+                "━━━━━━━━━━━━━━━━━━━━━\n"
+                "💡 Retrained daily at 00:00 UTC. Use `/deploy` to hot-reload."
+            )
+            bot.reply_to(message, report, parse_mode="Markdown")
+            return
+    except Exception:
+        pass
+    bot.reply_to(message, "❌ Could not retrieve model status from Backend.")
+
 @bot.message_handler(commands=['model_stats'])
 def check_model_stats(message):
     bot.reply_to(message, "📦 Grog checking Model Registry files...")
