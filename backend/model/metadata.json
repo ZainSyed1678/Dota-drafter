@@ -1,15 +1,15 @@
 {
-  "version": "v2.2.0",
-  "trained_at": "2026-10-20T12:19:30.633154",
-  "git_commit": "b8f7531",
+  "version": "v2026.10.21",
+  "trained_at": "2026-10-21T02:10:59.507106",
+  "git_commit": "a20320d",
   "data_freshness": {
-    "latest_match_id": 9023948873,
-    "latest_patch": "7.35d",
-    "match_count": 14907,
-    "training_matches": 10434,
-    "validation_matches": 2236,
-    "test_matches": 2237,
-    "latest_match_timestamp": "2026-10-20T12:19:30.633154"
+    "latest_match_id": 9054646059,
+    "latest_patch": "unknown",
+    "match_count": 49791,
+    "training_matches": 34853,
+    "validation_matches": 7468,
+    "test_matches": 7470,
+    "latest_match_timestamp": "2026-10-21T02:10:59.507095"
   },
   "config": {
     "recency": {
@@ -35,19 +35,19 @@
     }
   },
   "learned_weights": {
-    "matchup": 1.5603770269936024,
-    "synergy": 1.5120271672182797,
-    "winrate": 0.9606500999123794,
-    "model": 2.210981103971068,
-    "intercept": 0.10353840471474007,
+    "matchup": 2.788128688679873,
+    "synergy": 2.353304602435777,
+    "winrate": 0.8939155798084883,
+    "model": 2.2337733944643525,
+    "intercept": 0.08742182233978642,
     "k_matchup": 20.0,
     "k_synergy": 20.0,
     "recency_lambda": 0.2
   },
   "test_metrics": {
-    "accuracy": 0.5498,
-    "log_loss": 0.6836,
-    "roc_auc": 0.5764,
-    "brier_score": 0.2453
+    "accuracy": 0.5688,
+    "log_loss": 0.677,
+    "roc_auc": 0.5901,
+    "brier_score": 0.242
   }
 }
