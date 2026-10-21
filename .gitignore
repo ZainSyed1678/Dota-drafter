@@ -29,6 +29,7 @@ env/
 data/*.csv
 notebooks/*.csv
 matches*.csv
+!tests/fixtures/*.csv
 
 # Model binaries at root level (versioned models stored under model/vX.Y.Z/)
 model/*.pkl
