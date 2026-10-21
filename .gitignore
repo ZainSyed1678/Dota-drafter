@@ -24,11 +24,11 @@ env/
 .env
 
 # Large match data files (keep fixtures for CI)
-*.csv
-!tests/fixtures/*.csv
 data/*.csv
 notebooks/*.csv
 matches*.csv
+*.csv
+!tests/fixtures/*.csv
 
 # Model binaries at root level (versioned models stored under model/vX.Y.Z/)
 model/*.pkl
@@ -46,7 +46,5 @@ backend/__pycache__/
 .DS_Store
 Thumbs.db
 *.log
-/app
 graphify-out/
-
 brag-output/

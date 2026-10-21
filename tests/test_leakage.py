@@ -14,8 +14,10 @@ import pandas as pd
 def clean_team(x):
     try:
         while isinstance(x, str):
-            try: x = ast.literal_eval(x)
-            except Exception: break
+            try:
+                x = ast.literal_eval(x)
+            except Exception:
+                break
         if isinstance(x, str):
             x = x.replace('[', '').replace(']', '')
             x = [int(i.strip()) for i in x.split(',') if i.strip().isdigit()]
@@ -25,12 +27,27 @@ def clean_team(x):
 
 
 def test_zero_leakage_split():
-    # Use fixture dataset if present, or notebooks/matches.csv
+    # Use fixture dataset if present, or notebooks/matches.csv, or synthetic fallback
     fixture_path = Path("tests/fixtures/matches_fixture.csv")
-    if not fixture_path.exists():
-        fixture_path = Path("notebooks/matches.csv")
+    notebooks_path = Path("notebooks/matches.csv")
 
-    df = pd.read_csv(fixture_path)
+    if fixture_path.exists():
+        df = pd.read_csv(fixture_path)
+    elif notebooks_path.exists():
+        df = pd.read_csv(notebooks_path)
+    else:
+        # In-memory self-contained fallback ensuring zero-leakage test invariance in isolated CI
+        data = []
+        for i in range(100):
+            data.append({
+                "match_id": 1000 + i,
+                "radiant_win": bool(i % 2 == 0),
+                "radiant_team": "[1, 2, 3, 4, 5]",
+                "dire_team": "[6, 7, 8, 9, 10]",
+                "patch_version": "7.35f"
+            })
+        df = pd.DataFrame(data)
+
     df['radiant_team'] = df['radiant_team'].apply(clean_team)
     df['dire_team'] = df['dire_team'].apply(clean_team)
     valid_mask = (
