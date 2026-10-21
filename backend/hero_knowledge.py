@@ -310,7 +310,7 @@ def explain_counter(hero: str, enemy: str, wr_delta: float) -> dict:
     e_tags = HERO_TAGS.get(enemy, [])
 
     how = f"{hero} holds a favorable matchup against {enemy} ({wr_delta:+.1%} winrate advantage in high-MMR drafts)."
-    abilities = []
+    abilities: list[str] = []
     tip = f"Play around your team's initiation and prioritize shutting down {enemy} in skirmishes."
 
     if "anti_illusions" in h_tags and "illusion_army" in e_tags:
@@ -360,7 +360,7 @@ def explain_synergy(hero: str, ally: str, wr_delta: float) -> dict:
     a_tags = HERO_TAGS.get(ally, [])
 
     how = f"{hero} forms an effective combination with {ally}, boosting team win probability by {wr_delta:+.1%}."
-    abilities = []
+    abilities: list[str] = []
     tip = f"Coordinate spell timings and target focus together with {ally} during lane and teamfights."
 
     if ("stationary_bubble" in h_tags or "massive_aoe_stun" in h_tags) and ("channeled_physical_ult" in a_tags or "aoe_burst" in a_tags):

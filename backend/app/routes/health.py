@@ -38,12 +38,32 @@ def model_status():
 
 @router.get("/database/stats")
 def database_stats():
-    import psycopg2
+    freshness = store.metadata.get("data_freshness", {})
+    model_latest_match_id = freshness.get("latest_match_id", 0)
+
+    model_freshness_data = {
+        "version": store.metadata.get("version"),
+        "latest_patch": freshness.get("latest_patch"),
+        "model_trained_matches": freshness.get("match_count"),
+        "model_latest_match_id": model_latest_match_id,
+        "db_latest_match_id": None,
+        "is_up_to_date": True,
+        "unretrained_match_estimate": 0,
+    }
+
     db_url = settings.DATABASE_URL
     if not db_url:
-        return {"status": "no_database_url", "message": "DATABASE_URL not configured"}
+        return {
+            "status": "no_database_url",
+            "message": "DATABASE_URL not configured",
+            "total_matches": 0,
+            "patch_distribution": {},
+            "latest_run": None,
+            "model_freshness": model_freshness_data,
+        }
 
     try:
+        import psycopg2
         conn = psycopg2.connect(db_url, connect_timeout=5)
         with conn.cursor() as cur:
             cur.execute("SELECT COUNT(*), COALESCE(MAX(match_id), 0) FROM matches;")
@@ -70,9 +90,10 @@ def database_stats():
 
         conn.close()
 
-        freshness = store.metadata.get("data_freshness", {})
-        model_latest_match_id = freshness.get("latest_match_id", 0)
         unretrained = max(0, max_match_id - model_latest_match_id) if (max_match_id and model_latest_match_id) else 0
+        model_freshness_data["db_latest_match_id"] = max_match_id
+        model_freshness_data["is_up_to_date"] = (max_match_id <= model_latest_match_id) if model_latest_match_id else False
+        model_freshness_data["unretrained_match_estimate"] = unretrained
 
         return {
             "status": "ok",
@@ -80,18 +101,17 @@ def database_stats():
             "max_match_id": max_match_id,
             "patch_distribution": patch_counts,
             "latest_run": latest_run,
-            "model_freshness": {
-                "version": store.metadata.get("version"),
-                "latest_patch": freshness.get("latest_patch"),
-                "model_trained_matches": freshness.get("match_count"),
-                "model_latest_match_id": model_latest_match_id,
-                "db_latest_match_id": max_match_id,
-                "is_up_to_date": (max_match_id <= model_latest_match_id) if model_latest_match_id else False,
-                "unretrained_match_estimate": unretrained,
-            }
+            "model_freshness": model_freshness_data,
         }
     except Exception as e:
-        return {"status": "error", "message": str(e)}
+        return {
+            "status": "error",
+            "message": str(e),
+            "total_matches": 0,
+            "patch_distribution": {},
+            "latest_run": None,
+            "model_freshness": model_freshness_data,
+        }
 
 
 @router.post("/model/reload")

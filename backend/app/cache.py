@@ -7,7 +7,7 @@ class LRUCache:
     """Thread-safe LRU cache for FastAPI response caching."""
     def __init__(self, capacity: int = 1024):
         self.capacity = capacity
-        self.cache = OrderedDict()
+        self.cache: OrderedDict[Any, Any] = OrderedDict()
         self.lock = threading.Lock()
         self.hits = 0
         self.misses = 0
@@ -32,15 +32,19 @@ class LRUCache:
     def clear(self) -> None:
         with self.lock:
             self.cache.clear()
+            self.hits = 0
+            self.misses = 0
 
     def stats(self) -> dict:
         with self.lock:
+            total = self.hits + self.misses
+            hit_rate = (self.hits / total) if total > 0 else 0.0
             return {
                 "size": len(self.cache),
                 "capacity": self.capacity,
                 "hits": self.hits,
                 "misses": self.misses,
-                "hit_ratio": round(self.hits / (self.hits + self.misses), 3) if (self.hits + self.misses) > 0 else 0.0
+                "hit_rate": round(hit_rate, 4),
             }
 
 
