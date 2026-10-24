@@ -32,7 +32,7 @@ class DraftRequest(BaseModel):
     def validate_roles(cls, v: Optional[list]) -> Optional[list]:
         if v is None:
             return v
-        valid_roles = {"carry", "mid", "offlane", "support"}
+        valid_roles = {"carry", "mid", "offlane", "support", "soft_support", "hard_support"}
         cleaned = []
         for r in v:
             r_clean = str(r).strip().lower()
@@ -104,6 +104,7 @@ class ReasonDetail(BaseModel):
     summary: str
     target_hero: str = ""
     reason_type: str = "counter"  # counter | synergy | meta
+    one_liner: str = ""
     how_and_why: str = ""
     key_abilities: list[str] = []
     beginner_tip: str = ""
@@ -117,6 +118,7 @@ class HeroSuggestion(BaseModel):
     score:          float
     confidence:     str = "medium"  # low | medium | high
     sample_size:    int = 0
+    one_liner:      str = ""
     reasons:        list[str] = []
     reason_details: list[ReasonDetail] = []
     roles:          list[str] = []
@@ -126,6 +128,7 @@ class HeroSuggestion(BaseModel):
 
 class SuggestResponse(BaseModel):
     picks: list[HeroSuggestion]
+    categories: dict[str, list[HeroSuggestion]] = Field(default_factory=dict)
     roles_needed: list[str] = []
     role_aware: bool = False
     bracket: str = "all"

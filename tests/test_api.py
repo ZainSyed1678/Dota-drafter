@@ -184,3 +184,71 @@ def test_security_headers_present():
     assert res.headers.get("X-Content-Type-Options") == "nosniff"
     assert res.headers.get("X-Frame-Options") == "DENY"
 
+
+def test_suggest_ten_picks_per_category_and_oneliners():
+    payload = {"enemy": ["Anti-Mage"]}
+    res = client.post("/suggest", json=payload)
+    assert res.status_code == 200
+    data = res.json()
+    assert "categories" in data
+    categories = data["categories"]
+    required_roles = ["all", "carry", "mid", "offlane", "soft_support", "hard_support"]
+    for role in required_roles:
+        assert role in categories
+        picks = categories[role]
+        assert len(picks) == 10, f"Expected 10 picks for {role}, got {len(picks)}"
+        for p in picks:
+            assert "one_liner" in p
+            assert len(p["one_liner"]) > 5
+
+
+def test_missing_role_explanation_four_allies():
+    """
+    When user inputs 4 allies with 1 missing role (e.g. Mid), suggestions must:
+    1. Explain how the hero performs in the missing role.
+    2. Detail their stuns/disables and movement/mobility.
+    3. Never output the generic duplicate boilerplate string.
+    """
+    generic_boilerplate = "provides stable teamfight control and general utility that fits the current draft balance"
+
+    # Case 1: Axe (offlane), PA (carry), CM (support), Lion (support) -> Missing role: Mid
+    payload_mid = {
+        "enemy": [],
+        "team": ["Axe", "Phantom Assassin", "Crystal Maiden", "Lion"]
+    }
+    res_mid = client.post("/suggest", json=payload_mid)
+    assert res_mid.status_code == 200
+    data_mid = res_mid.json()
+    picks_mid = data_mid["picks"]
+    assert len(picks_mid) >= 5
+
+    for p in picks_mid:
+        one_liner = p["one_liner"]
+        assert len(one_liner) > 10
+        assert generic_boilerplate not in one_liner
+        # Check details for role fit
+        has_role_fit = any(d.get("reason_type") == "role_fit" for d in p.get("reason_details", []))
+        assert has_role_fit, f"Hero {p['name']} missing role_fit in reason_details"
+        for d in p.get("reason_details", []):
+            assert generic_boilerplate not in d.get("how_and_why", "")
+
+    # Case 2: 4 cores entered -> Missing role: Support
+    payload_sup = {
+        "enemy": [],
+        "team": ["Axe", "Phantom Assassin", "Puck", "Centaur Warrunner"]
+    }
+    res_sup = client.post("/suggest", json=payload_sup)
+    assert res_sup.status_code == 200
+    data_sup = res_sup.json()
+    categories = data_sup["categories"]
+    hard_sup_picks = categories.get("hard_support", [])
+    assert len(hard_sup_picks) == 10
+
+    # Ensure Ogre Magi, Shadow Shaman, Lich have distinct, unique one-liners and no generic boilerplate
+    one_liners = [p["one_liner"] for p in hard_sup_picks]
+    assert len(set(one_liners)) == len(one_liners), "Hard support picks must have unique one-liners without duplicates"
+    for ol in one_liners:
+        assert generic_boilerplate not in ol
+
+
+

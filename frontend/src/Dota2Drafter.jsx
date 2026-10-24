@@ -12,10 +12,12 @@ const ATTR_META = {
 };
 
 const ROLE_COLORS = {
-  carry:   "#c8a84b",
-  mid:     "#5b9bd5",
-  offlane: "#c84b4b",
-  support: "#4bc87a",
+  carry:        "#c8a84b",
+  mid:          "#5b9bd5",
+  offlane:      "#c84b4b",
+  support:      "#4bc87a",
+  soft_support: "#20b2aa",
+  hard_support: "#4bc87a",
 };
 
 const ATTR_ORDER = ["agility","strength","intelligence","universal"];
@@ -282,6 +284,16 @@ body{background:var(--bg);color:var(--text);overflow-x:hidden}
 .conf-badge.low{color:#94a3b8;border-color:rgba(148,163,184,.3);background:rgba(148,163,184,.08)}
 .sample-tag{font-size:9px;color:var(--dim);font-weight:600;display:inline-flex;align-items:center;gap:4px}
 
+.pick-one-liner{
+  display:flex;align-items:flex-start;gap:7px;
+  background:rgba(200,168,75,.09);border:1px solid rgba(200,168,75,.35);
+  border-left:3px solid var(--gold);
+  border-radius:3px;padding:7px 9px;margin-bottom:8px;
+  font-size:11.5px;line-height:1.42;color:#f3ebd8;
+}
+.one-liner-ico{font-size:13px;flex-shrink:0;line-height:1.2}
+.one-liner-txt{font-weight:600;letter-spacing:.2px}
+
 .pick-overview{font-size:11px;color:#a8b3cf;line-height:1.4;margin-bottom:8px}
 
 .pick-reasons{display:flex;flex-direction:column;gap:4px;margin-bottom:8px}
@@ -308,6 +320,7 @@ body{background:var(--bg);color:var(--text);overflow-x:hidden}
 .guide-item-hdr{display:flex;align-items:center;gap:6px;margin-bottom:4px}
 .guide-target-img{width:24px;height:14px;object-fit:cover;border-radius:2px}
 .guide-item-title{font-size:10px;font-weight:700}
+.guide-item-title.role_fit{color:var(--gold)}
 .guide-how{font-size:10px;color:#c0c9df;line-height:1.35;margin-bottom:4px}
 .guide-abilities{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:4px}
 .ability-pill{font-size:9px;background:rgba(255,255,255,.08);padding:1px 5px;border-radius:2px;color:#e2e8f0}
@@ -365,6 +378,7 @@ export default function Dota2Drafter() {
   const [bans,           setBans]            = useState([]);
   const [search,         setSearch]          = useState("");
   const [picks,          setPicks]           = useState(null);
+  const [categories,     setCategories]      = useState(null);
   const [loading,        setLoading]         = useState(false);
   const [apiErr,         setApiErr]          = useState("");
   const [beginnerOnly,   setBeginnerOnly]    = useState(false);
@@ -455,16 +469,17 @@ export default function Dota2Drafter() {
     if (mode === "bans"  && bans.length  < MAX_BANS)  setBans(b  => [...b, id]);
 
     setPicks(null);
+    setCategories(null);
     setApiErr("");
   }
 
-  function rmEnemy(id) { setEnemy(prev => prev.filter(x => x !== id)); setPicks(null); }
-  function rmTeam(id)  { setTeam(prev => prev.filter(x => x !== id));  setPicks(null); }
-  function rmBan(id)   { setBans(prev => prev.filter(x => x !== id));  setPicks(null); }
+  function rmEnemy(id) { setEnemy(prev => prev.filter(x => x !== id)); setPicks(null); setCategories(null); }
+  function rmTeam(id)  { setTeam(prev => prev.filter(x => x !== id));  setPicks(null); setCategories(null); }
+  function rmBan(id)   { setBans(prev => prev.filter(x => x !== id));  setPicks(null); setCategories(null); }
 
   function clearAll() {
     setEnemy([]); setTeam([]); setBans([]);
-    setPicks(null); setApiErr(""); setExpandedCardIds(new Set());
+    setPicks(null); setCategories(null); setApiErr(""); setExpandedCardIds(new Set());
   }
 
   function toggleCardGuide(id) {
@@ -478,7 +493,7 @@ export default function Dota2Drafter() {
 
   async function handleSuggest() {
     if (!enemy.length && !team.length) return;
-    setLoading(true); setApiErr(""); setPicks(null);
+    setLoading(true); setApiErr(""); setPicks(null); setCategories(null);
 
     const payload = {
       enemy: enemy,
@@ -504,6 +519,7 @@ export default function Dota2Drafter() {
       const data = await res.json();
       const resPicks = data.picks || [];
       setPicks(resPicks);
+      setCategories(data.categories || null);
       if (resPicks.length > 0) {
         setExpandedCardIds(new Set([resPicks[0].id]));
       }
@@ -519,16 +535,20 @@ export default function Dota2Drafter() {
   }
 
   const displayedPicks = useMemo(() => {
-    if (!picks) return null;
-    let list = picks;
+    if (!picks && !categories) return null;
+    let list = [];
+    if (categories && categories[selectedRole]) {
+      list = categories[selectedRole];
+    } else if (picks) {
+      list = selectedRole === "all"
+        ? picks
+        : picks.filter(p => (p.roles || []).map(r => r.toLowerCase()).includes(selectedRole));
+    }
     if (beginnerOnly) {
       list = list.filter(p => (p.difficulty || "Easy") === "Easy");
     }
-    if (selectedRole !== "all") {
-      list = list.filter(p => (p.roles || []).map(r => r.toLowerCase()).includes(selectedRole));
-    }
     return list;
-  }, [picks, beginnerOnly, selectedRole]);
+  }, [picks, categories, beginnerOnly, selectedRole]);
 
   const enemyHeroes = enemy.map(heroById).filter(Boolean);
   const teamHeroes  = team.map(heroById).filter(Boolean);
@@ -538,9 +558,9 @@ export default function Dota2Drafter() {
   function scoreColor(s) { return s >= 0 ? "" : "neg"; }
 
   function reasonClass(r) {
-    if (r.startsWith("Counters") || r.startsWith("Even")) return "counter";
+    if (r.startsWith("Counters") || r.startsWith("Even") || r.startsWith("Matchup")) return "counter";
     if (r.startsWith("Synergy"))  return "synergy";
-    if (r.startsWith("Meta"))     return "meta";
+    if (r.startsWith("Meta") || r.startsWith("Role Fit") || r.startsWith("Fills"))     return "meta";
     return "";
   }
 
@@ -732,20 +752,27 @@ export default function Dota2Drafter() {
       </aside>
 
       {/* RESULTS SECTION */}
-      {(picks !== null || apiErr || loading) && (
+      {(picks !== null || categories !== null || apiErr || loading) && (
         <section className="results" id="results-section">
           <div className="res-hdr">
             <div className="res-title">🎯 RECOMMENDED PICKS</div>
             <div className="res-controls">
               {/* Role Filter Pills */}
               <div className="role-filter-bar">
-                {["all", "carry", "mid", "offlane", "support"].map(r => (
+                {[
+                  { id: "all",          label: "ALL (10)" },
+                  { id: "carry",        label: "CARRY (POS 1)" },
+                  { id: "mid",          label: "MID (POS 2)" },
+                  { id: "offlane",      label: "OFFLANE (POS 3)" },
+                  { id: "soft_support", label: "SOFT SUPP (POS 4)" },
+                  { id: "hard_support", label: "HARD SUPP (POS 5)" },
+                ].map(r => (
                   <button
-                    key={r}
-                    className={`role-pill ${selectedRole === r ? "active" : ""}`}
-                    onClick={() => setSelectedRole(r)}
+                    key={r.id}
+                    className={`role-pill ${selectedRole === r.id ? "active" : ""}`}
+                    onClick={() => setSelectedRole(r.id)}
                   >
-                    {r.toUpperCase()}
+                    {r.label}
                   </button>
                 ))}
               </div>
@@ -777,7 +804,7 @@ export default function Dota2Drafter() {
             </div>
           )}
 
-          {picks && picks.length === 0 && !loading && (
+          {(!displayedPicks || displayedPicks.length === 0) && (picks !== null || categories !== null) && !loading && (
             <div className="state-box">
               No picks available matching current constraints. Try adjusting role filter or bans.
             </div>
@@ -803,13 +830,13 @@ export default function Dota2Drafter() {
                         {p.score > 0 ? "+" : ""}{p.score.toFixed(3)}
                       </div>
                       <div className="role-badges">
-                        {(p.roles || []).map(r => (
+                        {(p.roles || []).filter(r => r !== "support" || !(p.roles.includes("soft_support") || p.roles.includes("hard_support"))).map(r => (
                           <span
                             key={r}
                             className="rbadge"
                             style={{ color: ROLE_COLORS[r.toLowerCase()] || "#999",
                                      borderLeft: `2px solid ${ROLE_COLORS[r.toLowerCase()] || "#999"}` }}
-                          >{r}</span>
+                          >{r === "soft_support" ? "Pos 4" : r === "hard_support" ? "Pos 5" : r}</span>
                         ))}
                       </div>
                     </div>
@@ -833,6 +860,13 @@ export default function Dota2Drafter() {
                           </span>
                         )}
                       </div>
+
+                      {p.one_liner && (
+                        <div className="pick-one-liner">
+                          <span className="one-liner-ico">⚔️</span>
+                          <span className="one-liner-txt">{p.one_liner}</span>
+                        </div>
+                      )}
 
                       {p.overview && (
                         <div className="pick-overview">{p.overview}</div>
