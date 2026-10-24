@@ -4,8 +4,17 @@ import numpy as np
 
 from app.config import settings
 from app.hero_knowledge import (
+    CARRY_HEROES,
+    HARD_SUPPORTS,
+    MID_HEROES,
+    OFFLANE_HEROES,
+    SOFT_SUPPORTS,
+    SPECIFIC_COUNTERS,
+    SPECIFIC_SYNERGIES,
     explain_counter,
+    explain_role_fit,
     explain_synergy,
+    get_hero_overview,
 )
 from app.logger import get_logger
 from app.model_loader import store
@@ -14,8 +23,30 @@ log = get_logger("dota-api.scoring")
 
 
 def get_roles(hero_id: int) -> List[str]:
-    r = store.hero_roles.get(hero_id, ["offlane"])
-    return [x.lower() for x in (r if isinstance(r, list) else [r])]
+    hero_name = store.id_to_name.get(hero_id, "")
+    roles = []
+    if hero_name in CARRY_HEROES:
+        roles.append("carry")
+    if hero_name in MID_HEROES:
+        roles.append("mid")
+    if hero_name in OFFLANE_HEROES:
+        roles.append("offlane")
+    if hero_name in SOFT_SUPPORTS:
+        roles.append("soft_support")
+        if "support" not in roles:
+            roles.append("support")
+    if hero_name in HARD_SUPPORTS:
+        roles.append("hard_support")
+        if "support" not in roles:
+            roles.append("support")
+
+    # Safe fallback if hero not in any canonical set
+    if not roles:
+        raw = store.hero_roles.get(hero_id, ["offlane"])
+        roles = [x.lower() for x in (raw if isinstance(raw, list) else [raw])]
+        if "support" in roles:
+            roles.extend(["soft_support", "hard_support"])
+    return roles
 
 
 def resolve_hero_id(identifier: Any) -> Any:
@@ -151,12 +182,26 @@ def build_reasons_and_details(
     enemy_ids: List[int],
     enemy_names: List[str],
     ally_ids: List[int],
-    ally_names: List[str]
-) -> Tuple[List[str], List[dict], str, int]:
+    ally_names: List[str],
+    target_role: str = None
+) -> Tuple[List[str], List[dict], str, int, str]:
     reasons: List[str] = []
     details: List[dict] = []
     hero_name = store.id_to_name.get(hero_id, "This hero")
     bl = store.hero_avg_matchup.get(hero_id, 0.50)
+
+    # Determine role context for this hero
+    h_roles = get_roles(hero_id)
+    if target_role:
+        hero_role = target_role
+    elif ally_ids:
+        missing = infer_missing_roles(ally_ids)
+        overlap = [r for r in missing if r in h_roles]
+        hero_role = overlap[0] if overlap else (missing[0] if missing else (h_roles[0] if h_roles else "support"))
+    else:
+        hero_role = h_roles[0] if h_roles else "support"
+
+    role_fit = explain_role_fit(hero_name, hero_role, ally_names)
 
     counters = []
     neutral = []
@@ -174,9 +219,10 @@ def build_reasons_and_details(
         else:
             confidence = "low"
 
-        if adj >= 0.01:
+        is_known_counter = (hero_name, ename) in SPECIFIC_COUNTERS
+        if adj >= 0.01 or is_known_counter:
             counters.append((ename, adj, sample_size, confidence))
-        elif adj >= -0.005:
+        else:
             neutral.append((ename, adj, sample_size, confidence))
 
     def counter_sort_key(item):
@@ -203,35 +249,27 @@ def build_reasons_and_details(
             explanation["sample_size"] = sample_size
             explanation["confidence"] = conf
             details.append(explanation)
-    elif neutral:
+    elif neutral and enemy_ids:
         primary_confidence = neutral[0][3]
         primary_sample_size = neutral[0][2]
         for name, adj, sample_size, conf in neutral[:2]:
-            summary_str = f"Even vs {name} ({adj:+.1%} WR, {sample_size} games)"
+            if adj >= 0.0:
+                summary_str = f"Counters {name} ({adj:+.1%} WR, {sample_size} games)" if sample_size > 0 else f"Counters {name} ({adj:+.1%} WR)"
+            else:
+                summary_str = f"Matchup vs {name} ({adj:+.1%} WR, {sample_size} games)" if sample_size > 0 else f"Matchup vs {name} ({adj:+.1%} WR)"
             reasons.append(summary_str)
-            details.append({
-                "summary": summary_str,
-                "target_hero": name,
-                "reason_type": "meta",
-                "how_and_why": f"{hero_name} trades evenly into {name} without significant lane or game disadvantage.",
-                "key_abilities": [],
-                "beginner_tip": f"Play around your team's power spikes and stick close to allies when fighting {name}.",
-                "sample_size": sample_size,
-                "confidence": conf
-            })
+            explanation = explain_counter(hero_name, name, adj)
+            explanation["summary"] = summary_str
+            explanation["sample_size"] = sample_size
+            explanation["confidence"] = conf
+            details.append(explanation)
     else:
-        reasons.append("Picked for synergy / meta")
-        details.append({
-            "summary": "Picked for synergy / meta",
-            "target_hero": "",
-            "reason_type": "meta",
-            "how_and_why": f"{hero_name} provides stable teamfight control and general utility that fits the current draft balance.",
-            "key_abilities": [],
-            "beginner_tip": "Focus on hitting core item timings and group up for team objectives.",
-            "sample_size": 0,
-            "confidence": "medium"
-        })
+        # No enemies provided: primary reason is role fit & disables/mobility
+        reasons.append(role_fit["summary"])
+        details.append(role_fit)
+        primary_confidence = "high"
 
+    # Evaluate synergies with allies
     syn = []
     for aid, aname in zip(ally_ids, ally_names):
         pair = (min(hero_id, aid), max(hero_id, aid))
@@ -244,7 +282,8 @@ def build_reasons_and_details(
             syn_conf = "medium"
         else:
             syn_conf = "low"
-        if adj >= 0.01:
+        is_known_syn = (hero_name, aname) in SPECIFIC_SYNERGIES or (aname, hero_name) in SPECIFIC_SYNERGIES
+        if adj >= 0.01 or is_known_syn:
             syn.append((aname, adj, sample_size, syn_conf))
 
     syn.sort(key=lambda x: (2 if x[3] == "high" else (1 if x[3] == "medium" else 0), x[1]), reverse=True)
@@ -263,6 +302,10 @@ def build_reasons_and_details(
         explanation["confidence"] = syn_conf
         details.append(explanation)
 
+    # Ensure role_fit is included in details when enemies were present so tactical breakdown is always complete
+    if enemy_ids and role_fit not in details:
+        details.append(role_fit)
+
     wr = store.hero_winrate.get(hero_id, 0.50)
     if wr > 0.53:
         summary_str = f"Meta strong ({wr:.1%} WR)"
@@ -278,4 +321,25 @@ def build_reasons_and_details(
             "confidence": "high"
         })
 
-    return reasons, details, primary_confidence, primary_sample_size
+    # Determine punchy tactical one-liner explanation
+    # If 4 allies are given (filling final missing role) or explicit target_role is requested (like Mid tab),
+    # prioritize the role-fit one-liner explaining their role, stuns/disables, and movement.
+    if len(ally_ids) == 4 or (target_role and target_role != "all"):
+        one_liner = role_fit["one_liner"]
+    else:
+        counter_details = [d for d in details if d.get("reason_type") == "counter" and d.get("one_liner")]
+        if counter_details:
+            one_liner = counter_details[0]["one_liner"]
+        elif role_fit.get("one_liner"):
+            one_liner = role_fit["one_liner"]
+        elif details:
+            one_liner = details[0].get("one_liner") or details[0].get("how_and_why", "").split(". ")[0].strip() + "."
+        else:
+            overview = get_hero_overview(hero_name)
+            one_liner = f"{hero_name}: {overview.split('.')[0].strip()}."
+
+    if not one_liner:
+        overview = get_hero_overview(hero_name)
+        one_liner = f"{hero_name}: {overview.split('.')[0].strip()}."
+
+    return reasons, details, primary_confidence, primary_sample_size, one_liner

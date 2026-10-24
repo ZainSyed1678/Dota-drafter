@@ -68,43 +68,65 @@ def suggest(request: Request, req: DraftRequest, response: Response):
         matches_role = bool(h_roles & set(target_roles)) if is_role_aware else True
         scored.append((hero_id, score, matches_role))
 
-    if is_role_aware and target_roles:
-        role_candidates = [x for x in scored if x[2]]
-        role_candidates.sort(key=lambda x: x[1], reverse=True)
-        selected_picks = role_candidates[:9]
-        if len(selected_picks) < 9:
-            other_candidates = [x for x in scored if not x[2]]
-            other_candidates.sort(key=lambda x: x[1], reverse=True)
-            selected_picks.extend(other_candidates[: 9 - len(selected_picks)])
-    else:
-        scored.sort(key=lambda x: x[1], reverse=True)
-        selected_picks = scored[:9]
+    scored.sort(key=lambda x: x[1], reverse=True)
 
-    picks = []
     enemy_names = [store.id_to_name.get(e, str(e)) for e in enemy_ids]
     ally_names = [store.id_to_name.get(a, str(a)) for a in ally_ids]
 
-    for item in selected_picks:
-        hero_id, score = item[0], item[1]
+    suggestion_cache = {}
+
+    # Detect missing roles from ally composition
+    missing_roles = scoring.infer_missing_roles(ally_ids) if ally_ids else []
+    primary_missing = missing_roles[0] if (len(ally_ids) == 4 and missing_roles) else None
+
+    def get_or_create_suggestion(hero_id: int, score: float, target_role: str = None) -> HeroSuggestion:
+        cache_key = (hero_id, target_role)
+        if cache_key in suggestion_cache:
+            return suggestion_cache[cache_key]
         hero_name = store.id_to_name[hero_id]
-        reasons, reason_details, hero_conf, hero_samples = scoring.build_reasons_and_details(
-            hero_id, enemy_ids, enemy_names, ally_ids, ally_names
+        reasons, reason_details, hero_conf, hero_samples, one_liner = scoring.build_reasons_and_details(
+            hero_id, enemy_ids, enemy_names, ally_ids, ally_names, target_role=target_role
         )
-        picks.append(HeroSuggestion(
+        sug = HeroSuggestion(
             id=hero_id,
             name=hero_name,
             score=round(score, 4),
             confidence=hero_conf,
             sample_size=hero_samples,
+            one_liner=one_liner,
             reasons=reasons,
             reason_details=reason_details,
             roles=scoring.get_roles(hero_id),
             difficulty=get_hero_difficulty(hero_name),
             overview=get_hero_overview(hero_name),
-        ))
+        )
+        suggestion_cache[cache_key] = sug
+        return sug
+
+    # Populate 10 picks per role category
+    categories = {}
+    for cat in ["all", "carry", "mid", "offlane", "soft_support", "hard_support"]:
+        if cat == "all":
+            candidates = scored[:10]
+            cat_role = primary_missing
+        else:
+            candidates = [x for x in scored if cat in scoring.get_roles(x[0])][:10]
+            cat_role = cat
+        categories[cat] = [get_or_create_suggestion(hid, sc, target_role=cat_role) for hid, sc, _ in candidates]
+
+    if is_role_aware and target_roles:
+        role_candidates = [x for x in scored if x[2]]
+        selected_picks = role_candidates[:10]
+        if len(selected_picks) < 10:
+            other_candidates = [x for x in scored if not x[2]]
+            selected_picks.extend(other_candidates[: 10 - len(selected_picks)])
+        picks = [get_or_create_suggestion(hid, sc, target_role=target_roles[0]) for hid, sc, _ in selected_picks]
+    else:
+        picks = categories["all"]
 
     result = SuggestResponse(
         picks=picks,
+        categories=categories,
         roles_needed=target_roles,
         role_aware=is_role_aware,
         bracket=bracket,
