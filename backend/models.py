@@ -30,10 +30,10 @@ class DraftRequest(BaseModel):
     def validate_roles(cls, v: Optional[list]) -> Optional[list]:
         if v is None:
             return v
-        valid_roles = {"carry", "mid", "offlane", "support"}
+        valid_roles = {"carry", "mid", "offlane", "support", "soft_support", "hard_support"}
         cleaned = []
         for r in v:
-            r_clean = str(r).strip().lower()
+            r_clean = str(r).strip().lower().replace(" ", "_")
             if r_clean not in valid_roles:
                 raise ValueError(f"Invalid role '{r}'. Valid roles are: {', '.join(sorted(valid_roles))}")
             cleaned.append(r_clean)

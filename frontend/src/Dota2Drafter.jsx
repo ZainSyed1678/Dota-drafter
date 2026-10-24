@@ -495,12 +495,16 @@ export default function Dota2Drafter() {
     if (!enemy.length && !team.length) return;
     setLoading(true); setApiErr(""); setPicks(null); setCategories(null);
 
+    const targetRoleNeeded = (selectedRole === "soft_support" || selectedRole === "hard_support")
+      ? "support"
+      : (selectedRole !== "all" ? selectedRole : null);
+
     const payload = {
       enemy: enemy,
       team: team,
       bans: bans,
       role_aware: roleAware,
-      roles_needed: selectedRole !== "all" ? [selectedRole] : null,
+      roles_needed: targetRoleNeeded ? [targetRoleNeeded] : null,
       bracket: bracket
     };
 
@@ -542,7 +546,12 @@ export default function Dota2Drafter() {
     } else if (picks) {
       list = selectedRole === "all"
         ? picks
-        : picks.filter(p => (p.roles || []).map(r => r.toLowerCase()).includes(selectedRole));
+        : picks.filter(p => {
+            const rList = (p.roles || []).map(r => r.toLowerCase());
+            if (rList.includes(selectedRole)) return true;
+            if ((selectedRole === "soft_support" || selectedRole === "hard_support") && rList.includes("support")) return true;
+            return false;
+          });
     }
     if (beginnerOnly) {
       list = list.filter(p => (p.difficulty || "Easy") === "Easy");
