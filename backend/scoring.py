@@ -1,7 +1,6 @@
 from typing import Any, List, Tuple
 
 import numpy as np
-
 from app.config import settings
 from app.hero_knowledge import (
     CARRY_HEROES,
