@@ -50,6 +50,15 @@ jobs:
           if git diff --staged --quiet; then
             echo "No model changes detected to commit."
           else
-            git commit -m "chore(model): daily automated retrain [skip ci]"
+            VERSION=$(date +%Y.%m.%d)
+            git commit -m "chore(model): automated retrain v${VERSION}"
             git push origin main
           fi
+
+      - name: Trigger Render Deploy Hook (Optional)
+        if: env.RENDER_DEPLOY_HOOK != ''
+        env:
+          RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+        run: |
+          echo "Pinging Render Deploy Hook to guarantee deployment..."
+          curl -s -X POST "$RENDER_DEPLOY_HOOK" || true

@@ -91,7 +91,13 @@ def notify_backend_reload(backend_url: str, version: str = None, admin_key: str 
 
     print(f"\n=== Step 3: Triggering hot reload on Render ({endpoint}) ===")
     try:
-        resp = requests.post(endpoint, params=params, headers=headers, timeout=20)
+        # Pre-ping health endpoint to wake up Render if sleeping
+        try:
+            requests.get(f"{backend_url}/health", timeout=30)
+        except Exception:
+            pass
+
+        resp = requests.post(endpoint, params=params, headers=headers, timeout=50)
         if resp.status_code == 200:
             print(f"Hot-reload SUCCESS: {resp.json()}")
             return True
