@@ -397,42 +397,39 @@ export default function Dota2Drafter() {
     document.head.appendChild(s);
   }, []);
 
-  // Fetch dynamic heroes list and data freshness on mount
+  // Fetch dynamic heroes list and data freshness in parallel on mount
   useEffect(() => {
-    async function initData() {
-      try {
-        const res = await fetch(`${API}/heroes`);
-        if (res.ok) {
-          const data = await res.json();
-          if (Array.isArray(data) && data.length > 0) {
-            const mapped = data.map(h => ({
-              id: h.id,
-              name: h.name,
-              img: h.short_name || h.name.toLowerCase().replace(/ /g, "_").replace(/'/g, ""),
-              attr: h.attribute === "str" ? "strength" :
-                    h.attribute === "agi" ? "agility" :
-                    h.attribute === "int" ? "intelligence" : "universal",
-              roles: h.roles || [],
-              image_url: h.image_url
-            }));
-            setHeroesList(mapped);
-          }
-        }
-      } catch (e) {
-        console.warn("Failed to load /heroes, using initial fallback:", e);
-      }
-
-      try {
-        const hRes = await fetch(`${API}/health`);
-        if (hRes.ok) {
-          const hData = await hRes.json();
-          setHealthInfo(hData);
-        }
-      } catch (e) {
+    // 1. Fetch health and data freshness immediately
+    fetch(`${API}/health`)
+      .then(res => res.ok ? res.json() : null)
+      .then(hData => {
+        if (hData) setHealthInfo(hData);
+      })
+      .catch(e => {
         console.warn("Failed to load /health:", e);
-      }
-    }
-    initData();
+      });
+
+    // 2. Fetch heroes metadata concurrently
+    fetch(`${API}/heroes`)
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (Array.isArray(data) && data.length > 0) {
+          const mapped = data.map(h => ({
+            id: h.id,
+            name: h.name,
+            img: h.short_name || h.name.toLowerCase().replace(/ /g, "_").replace(/'/g, ""),
+            attr: h.attribute === "str" ? "strength" :
+                  h.attribute === "agi" ? "agility" :
+                  h.attribute === "int" ? "intelligence" : "universal",
+            roles: h.roles || [],
+            image_url: h.image_url
+          }));
+          setHeroesList(mapped);
+        }
+      })
+      .catch(e => {
+        console.warn("Failed to load /heroes, using initial fallback:", e);
+      });
   }, []);
 
   const allSel = useMemo(() => new Set([...enemy, ...team, ...bans]), [enemy, team, bans]);
@@ -940,16 +937,19 @@ export default function Dota2Drafter() {
       <footer className="app-footer">
         <div className="footer-left">
           <span className="footer-badge">
-            ⚡ <strong>Model:</strong> {healthInfo?.model_version || "v2.2.0"}
+            ⚡ <strong>Model:</strong> {healthInfo?.model_version || "v2026.10.24"}
           </span>
           <span className="footer-badge">
-            📅 <strong>Patch:</strong> {healthInfo?.data_freshness?.latest_patch || "7.35d"}
+            📅 <strong>Patch:</strong> {healthInfo?.data_freshness?.latest_patch || "7.35f"}
           </span>
           <span className="footer-badge">
-            📊 <strong>Matches:</strong> {healthInfo?.data_freshness?.match_count?.toLocaleString() || "14,907"}
+            📊 <strong>Matches:</strong> {healthInfo?.data_freshness?.match_count?.toLocaleString() || "99,892"}
           </span>
           <span className="footer-badge">
             🛡 <strong>Zero-Leakage Guarantee:</strong> Verified
+          </span>
+          <span className="footer-badge" style={{ color: healthInfo ? "#4bc87a" : "#e6b800", fontSize: "10.5px" }}>
+            {healthInfo ? "● Live Telemetry" : "○ Connecting..."}
           </span>
         </div>
         <div className="footer-right">
