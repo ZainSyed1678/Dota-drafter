@@ -1,9 +1,9 @@
-name: Daily Match Collection & Retrain Pipeline
+name: Match Collection & Retrain Pipeline
 
 on:
   schedule:
-    # Run once daily at 00:00 UTC
-    - cron: '0 0 * * *'
+    # Run every 3 days at 02:00 UTC
+    - cron: '0 2 */3 * *'
   workflow_dispatch: # Allows manual trigger anytime from GitHub UI
 
 permissions:
