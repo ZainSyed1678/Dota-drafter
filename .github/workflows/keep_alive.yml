@@ -13,7 +13,13 @@ jobs:
       - name: Ping Render Backend & Telegram Bot
         run: |
           echo "Sending keep-alive pulse to Render..."
+          set +e
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 https://dota-drafter-api.onrender.com/health)
+          CURL_EXIT_CODE=$?
+          set -e
+          if [ "$CURL_EXIT_CODE" -ne 0 ] || [ -z "$STATUS" ]; then
+            STATUS=000
+          fi
           echo "Pulse status code: $STATUS"
           if [ "$STATUS" -eq 200 ]; then
             echo "SUCCESS: Render backend and Telegram supervisor bot are awake and running 24/7!"
