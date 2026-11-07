@@ -1,0 +1,54 @@
+{
+  "version": "v2026.11.07",
+  "trained_at": "2026-11-07T08:08:46.440497",
+  "git_commit": "f0af71f",
+  "data_freshness": {
+    "latest_match_id": 9079630147,
+    "latest_patch": "7.35f",
+    "match_count": 99830,
+    "training_matches": 69881,
+    "validation_matches": 14974,
+    "test_matches": 14975,
+    "latest_match_timestamp": "2026-11-07T08:08:46.440485"
+  },
+  "config": {
+    "recency": {
+      "decay_type": "patch_exponential",
+      "lambda_time": 0.2,
+      "patch_weights": {
+        "7.35f": 1.0,
+        "7.35d": 0.85,
+        "7.35c": 0.7,
+        "7.35b": 0.5,
+        "7.35": 0.35,
+        "older": 0.2
+      },
+      "default_patch_weight": 0.5
+    },
+    "shrinkage": {
+      "k_matchup": 20.0,
+      "k_synergy": 20.0
+    },
+    "splits": {
+      "train_ratio": 0.7,
+      "val_ratio": 0.15,
+      "test_ratio": 0.15
+    }
+  },
+  "learned_weights": {
+    "matchup": 3.3550146074131537,
+    "synergy": 2.0244047243217267,
+    "winrate": 0.8570026372427975,
+    "model": 2.5424782865233353,
+    "intercept": 0.05175477495016962,
+    "k_matchup": 20.0,
+    "k_synergy": 20.0,
+    "recency_lambda": 0.2
+  },
+  "test_metrics": {
+    "accuracy": 0.5569,
+    "log_loss": 0.6818,
+    "roc_auc": 0.5764,
+    "brier_score": 0.2444
+  }
+}
