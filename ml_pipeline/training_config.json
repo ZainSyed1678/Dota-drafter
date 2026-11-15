@@ -1,20 +1,29 @@
 {
   "recency": {
     "decay_type": "patch_exponential",
-    "lambda_time": 0.2,
+    "lambda_time": 0.1,
     "patch_weights": {
       "7.35f": 1.0,
-      "7.35d": 0.85,
-      "7.35c": 0.70,
-      "7.35b": 0.50,
-      "7.35": 0.35,
-      "older": 0.20
+      "7.35d": 0.75,
+      "7.35c": 0.60,
+      "7.35b": 0.45,
+      "older": 0.25
     },
     "default_patch_weight": 0.50
   },
   "shrinkage": {
-    "k_matchup": 20.0,
-    "k_synergy": 20.0
+    "mode": "adaptive",
+    "k_matchup": 15.0,
+    "k_synergy": 15.0,
+    "k_hero": 10.0,
+    "gamma": 0.5
+  },
+  "confidence_tiers": {
+    "high_min_games": 200,
+    "medium_min_games": 50,
+    "low_min_games": 10,
+    "max_interval_width_high": 0.08,
+    "max_interval_width_medium": 0.15
   },
   "splits": {
     "train_ratio": 0.70,

@@ -29,6 +29,17 @@ import requests
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, brier_score_loss, log_loss, roc_auc_score
 
+try:
+    from ml_pipeline.adaptive_shrinkage import (
+        compute_adaptive_matchup_shrinkage,
+        compute_adaptive_synergy_shrinkage,
+    )
+except ImportError:
+    from adaptive_shrinkage import (
+        compute_adaptive_matchup_shrinkage,
+        compute_adaptive_synergy_shrinkage,
+    )
+
 
 def clean_team(x):
     """Clean team string or list into list of valid hero integers."""
@@ -281,20 +292,34 @@ def train_pipeline(
     global_prior = float(np.mean(list(hero_winrate.values()))) if hero_winrate else 0.50
     hero_avg_matchup = {h: hero_winrate.get(h, 0.50) for h in sorted_heroes}
 
-    # Empirical-Bayes Shrinkage
-    shrunk_matchup = {}
-    matchup_sample_sizes = {}
-    for pair, g in matchup_games.items():
-        h1, h2 = pair
-        prior = hero_winrate.get(h1, global_prior)
-        shrunk_matchup[pair] = (matchup_wins[pair] + k_matchup * prior) / (g + k_matchup)
-        matchup_sample_sizes[pair] = int(round(g))
+    shrink_mode = cfg.get("shrinkage", {}).get("mode", "fixed")
+    k_matchup = cfg.get("shrinkage", {}).get("k_matchup", 20.0)
+    k_synergy = cfg.get("shrinkage", {}).get("k_synergy", 20.0)
+    gamma = cfg.get("shrinkage", {}).get("gamma", 0.5)
 
-    shrunk_synergy = {}
-    synergy_sample_sizes = {}
-    for pair, g in synergy_games.items():
-        shrunk_synergy[pair] = (synergy_wins[pair] + k_synergy * 0.50) / (g + k_synergy)
-        synergy_sample_sizes[pair] = int(round(g))
+    # Empirical-Bayes Shrinkage (Adaptive or Fixed)
+    matchup_sample_sizes = {pair: int(round(g)) for pair, g in matchup_games.items()}
+    synergy_sample_sizes = {pair: int(round(g)) for pair, g in synergy_games.items()}
+
+    if shrink_mode == "adaptive":
+        print(f"Applying adaptive Empirical-Bayes shrinkage (base_k_m={k_matchup}, base_k_s={k_synergy})...")
+        shrunk_matchup, _ = compute_adaptive_matchup_shrinkage(
+            matchup_wins, matchup_games, hero_winrate, global_prior=global_prior, base_k=k_matchup, gamma=gamma
+        )
+        shrunk_synergy, _ = compute_adaptive_synergy_shrinkage(
+            synergy_wins, synergy_games, base_k=k_synergy, gamma=gamma
+        )
+    else:
+        print(f"Applying fixed Empirical-Bayes shrinkage (k_m={k_matchup}, k_s={k_synergy})...")
+        shrunk_matchup = {}
+        for pair, g in matchup_games.items():
+            h1, h2 = pair
+            prior = hero_winrate.get(h1, global_prior)
+            shrunk_matchup[pair] = (matchup_wins[pair] + k_matchup * prior) / (g + k_matchup)
+
+        shrunk_synergy = {}
+        for pair, g in synergy_games.items():
+            shrunk_synergy[pair] = (synergy_wins[pair] + k_synergy * 0.50) / (g + k_synergy)
 
     # Train LightGBM
     X_lgb_train = build_lgb_features(train_df, sorted_heroes, hero_to_idx, hero_winrate)
