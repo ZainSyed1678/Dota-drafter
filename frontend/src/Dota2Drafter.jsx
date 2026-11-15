@@ -1,508 +1,1370 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import INITIAL_HEROES from "./heroes_fallback.json";
 
-const IMG = img =>
-  `https://cdn.cloudflare.steamstatic.com/apps/dota2/images/heroes/${img}_full.png`;
+const API = import.meta.env.VITE_API_URL || "/api";
 
-const ATTR_META = {
-  agility:      { color:"#4bc87a", icon:"⚡" },
-  strength:     { color:"#c84b4b", icon:"🛡"  },
-  intelligence: { color:"#5b9bd5", icon:"✦"   },
-  universal:    { color:"#c8a84b", icon:"◈"   },
+// ── ATTRIBUTE METADATA ─────────────────────────────────────────────────────────
+const HERO_ATTRIBUTES_META = {
+  strength: {
+    title: "STRENGTH",
+    icon: "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/icons/hero_strength.png",
+    color: "var(--str-red)",
+  },
+  agility: {
+    title: "AGILITY",
+    icon: "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/icons/hero_agility.png",
+    color: "var(--agi-green)",
+  },
+  intelligence: {
+    title: "INTELLIGENCE",
+    icon: "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/icons/hero_intelligence.png",
+    color: "var(--int-blue)",
+  },
+  universal: {
+    title: "UNIVERSAL",
+    icon: "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/icons/hero_universal.png",
+    color: "var(--uni-purple)",
+  },
 };
 
-const ROLE_COLORS = {
-  carry:        "#c8a84b",
-  mid:          "#5b9bd5",
-  offlane:      "#c84b4b",
-  support:      "#4bc87a",
-  soft_support: "#20b2aa",
-  hard_support: "#4bc87a",
-};
-
-const ATTR_ORDER = ["agility","strength","intelligence","universal"];
+const ATTR_ORDER = ["strength", "agility", "intelligence", "universal"];
 const MAX_ENEMY = 5;
 const MAX_ALLY = 4;
 const MAX_BANS = 7;
-const API = import.meta.env.VITE_API_URL || "/api";
 
-// ── CSS ───────────────────────────────────────────────────────────────────────
+// Canonical position mapping (1: Carry, 2: Mid, 3: Offlane, 4: Soft Supp, 5: Hard Supp)
+const HERO_PRIMARY_POS = {
+  "Anti-Mage": 1, "Axe": 3, "Bane": 5, "Bloodseeker": 1, "Crystal Maiden": 5, "Drow Ranger": 1, "Earthshaker": 4,
+  "Juggernaut": 1, "Mirana": 4, "Morphling": 1, "Shadow Fiend": 2, "Phantom Lancer": 1, "Puck": 2, "Pudge": 2,
+  "Razor": 2, "Sand King": 3, "Storm Spirit": 2, "Sven": 1, "Tiny": 2, "Vengeful Spirit": 5, "Windranger": 2,
+  "Zeus": 2, "Kunkka": 2, "Lina": 2, "Lion": 5, "Shadow Shaman": 5, "Slardar": 3, "Tidehunter": 3, "Witch Doctor": 5,
+  "Lich": 5, "Riki": 1, "Enigma": 3, "Tinker": 2, "Sniper": 2, "Necrophos": 2, "Warlock": 5, "Beastmaster": 3,
+  "Queen of Pain": 2, "Venomancer": 4, "Faceless Void": 1, "Wraith King": 1, "Death Prophet": 2, "Phantom Assassin": 1,
+  "Pugna": 4, "Templar Assassin": 2, "Viper": 2, "Luna": 1, "Dragon Knight": 2, "Dazzle": 5, "Clockwerk": 4,
+  "Leshrac": 2, "Nature's Prophet": 3, "Lifestealer": 1, "Dark Seer": 3, "Clinkz": 1, "Omniknight": 3, "Enchantress": 5,
+  "Huskar": 2, "Night Stalker": 3, "Broodmother": 3, "Bounty Hunter": 4, "Weaver": 1, "Jakiro": 5, "Batrider": 3,
+  "Chen": 5, "Spectre": 1, "Ancient Apparition": 5, "Doom": 3, "Ursa": 1, "Spirit Breaker": 4, "Gyrocopter": 1,
+  "Alchemist": 1, "Invoker": 2, "Silencer": 5, "Outworld Destroyer": 2, "Lycan": 1, "Brewmaster": 3, "Shadow Demon": 5,
+  "Lone Druid": 1, "Chaos Knight": 1, "Meepo": 2, "Treant Protector": 5, "Ogre Magi": 5, "Undying": 5, "Rubick": 4,
+  "Disruptor": 5, "Nyx Assassin": 4, "Naga Siren": 1, "Keeper of the Light": 5, "Io": 5, "Visage": 3, "Slark": 1,
+  "Medusa": 1, "Troll Warlord": 1, "Centaur Warrunner": 3, "Magnus": 3, "Timbersaw": 3, "Bristleback": 3, "Tusk": 4,
+  "Skywrath Mage": 4, "Abaddon": 5, "Elder Titan": 4, "Legion Commander": 3, "Techies": 4, "Ember Spirit": 2,
+  "Earth Spirit": 4, "Underlord": 3, "Terrorblade": 1, "Phoenix": 4, "Oracle": 5, "Winter Wyvern": 5, "Arc Warden": 2,
+  "Monkey King": 1, "Dark Willow": 4, "Pangolier": 2, "Grimstroke": 5, "Hoodwink": 4, "Void Spirit": 2, "Snapfire": 4,
+  "Mars": 3, "Dawnbreaker": 3, "Marci": 4, "Primal Beast": 3, "Muerta": 1, "Ringmaster": 4,
+};
+
+// Complexity: 1 = Beginner / Easy, 2 = Moderate, 3 = High
+const HERO_COMPLEXITY = {
+  "Anti-Mage": 1, "Axe": 1, "Bane": 2, "Bloodseeker": 1, "Crystal Maiden": 1, "Drow Ranger": 1, "Earthshaker": 2,
+  "Juggernaut": 1, "Mirana": 2, "Morphling": 3, "Shadow Fiend": 2, "Phantom Lancer": 2, "Puck": 3, "Pudge": 2,
+  "Razor": 1, "Sand King": 2, "Storm Spirit": 3, "Sven": 1, "Tiny": 2, "Vengeful Spirit": 1, "Windranger": 2,
+  "Zeus": 1, "Kunkka": 2, "Lina": 2, "Lion": 1, "Shadow Shaman": 1, "Slardar": 1, "Tidehunter": 1, "Witch Doctor": 1,
+  "Lich": 1, "Riki": 1, "Enigma": 2, "Tinker": 3, "Sniper": 1, "Necrophos": 1, "Warlock": 1, "Beastmaster": 2,
+  "Queen of Pain": 2, "Venomancer": 1, "Faceless Void": 2, "Wraith King": 1, "Death Prophet": 1, "Phantom Assassin": 1,
+  "Pugna": 2, "Templar Assassin": 2, "Viper": 1, "Luna": 1, "Dragon Knight": 1, "Dazzle": 1, "Clockwerk": 2,
+  "Leshrac": 2, "Nature's Prophet": 2, "Lifestealer": 1, "Dark Seer": 2, "Clinkz": 2, "Omniknight": 1, "Enchantress": 2,
+  "Huskar": 1, "Night Stalker": 1, "Broodmother": 3, "Bounty Hunter": 1, "Weaver": 2, "Jakiro": 1, "Batrider": 2,
+  "Chen": 3, "Spectre": 1, "Ancient Apparition": 1, "Doom": 2, "Ursa": 1, "Spirit Breaker": 1, "Gyrocopter": 1,
+  "Alchemist": 1, "Invoker": 3, "Silencer": 1, "Outworld Destroyer": 2, "Lycan": 2, "Brewmaster": 3, "Shadow Demon": 2,
+  "Lone Druid": 3, "Chaos Knight": 1, "Meepo": 3, "Treant Protector": 1, "Ogre Magi": 1, "Undying": 1, "Rubick": 3,
+  "Disruptor": 2, "Nyx Assassin": 2, "Naga Siren": 2, "Keeper of the Light": 2, "Io": 3, "Visage": 3, "Slark": 2,
+  "Medusa": 1, "Troll Warlord": 2, "Centaur Warrunner": 1, "Magnus": 2, "Timbersaw": 2, "Bristleback": 1, "Tusk": 2,
+  "Skywrath Mage": 1, "Abaddon": 1, "Elder Titan": 2, "Legion Commander": 1, "Techies": 2, "Ember Spirit": 2,
+  "Earth Spirit": 3, "Underlord": 1, "Terrorblade": 2, "Phoenix": 2, "Oracle": 3, "Winter Wyvern": 2, "Arc Warden": 3,
+  "Monkey King": 2, "Dark Willow": 2, "Pangolier": 2, "Grimstroke": 2, "Hoodwink": 2, "Void Spirit": 2, "Snapfire": 1,
+  "Mars": 1, "Dawnbreaker": 1, "Marci": 2, "Primal Beast": 1, "Muerta": 2, "Ringmaster": 2,
+};
+
+const ROLES_TABS = [
+  { id: "all", label: "ALL ROLES", pos: "Overall", desc: "Top 10 highest-impact counter picks across any role" },
+  { id: "carry", label: "CARRY", pos: "POS 1", desc: "Safe Lane • Gold priority • Late game core" },
+  { id: "mid", label: "MIDLANE", pos: "POS 2", desc: "Solo Mid • Fast tempo • Level scaling" },
+  { id: "offlane", label: "OFFLANE", pos: "POS 3", desc: "Hard Lane • Frontline tank & teamfight initiator" },
+  { id: "soft_support", label: "SOFT SUPPORT", pos: "POS 4", desc: "Roaming • Active ganker, playmaker & disabler" },
+  { id: "hard_support", label: "HARD SUPPORT", pos: "POS 5", desc: "Safe Lane • Protector, healer & ward provider" },
+];
+
+// Helper to resolve hero image URLs
+function getHeroPortraitUrl(hero) {
+  if (!hero) return "";
+  return `https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/${hero.img}.png`;
+}
+
+// ── CSS STYLES (PURE VALVE IN-GAME THEME) ────────────────────────────────────
 const CSS = `
-@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Rajdhani:wght@400;600;700&display=swap');
+:root {
+  /* Backgrounds: Deep navy-black with subtle blue haze */
+  --bg-base: #070b14;
+  --bg-gradient-top: #0a1120;
+  --bg-topbar: #0d1522;
+  --bg-dock: #080c14;
+  --bg-card: #090e18;
 
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  /* Borders & Dividers */
+  --border-subtle: rgba(125, 141, 161, 0.16);
+  --border-card: rgba(255, 255, 255, 0.08);
+  --border-hover: rgba(207, 227, 255, 0.6);
+  --glow-hover: rgba(125, 170, 230, 0.35);
 
-:root{
-  --bg:#06080d;--panel:#0b0f16;--border:#1a2436;
-  --gold:#c8a84b;--gold-dim:#7a6228;
-  --red:#c84b4b;--green:#4bc87a;--blue:#3a8fd4;--orange:#e07a3f;
-  --text:#d4c5a0;--dim:#4a5568;
+  /* Typography */
+  --text-primary: #dfe6ee;
+  --text-secondary: #7d8da1;
+  --text-muted: #4a5a6e;
+  --font-display: 'Barlow Condensed', 'Rajdhani', -apple-system, sans-serif;
+  --font-body: 'Inter', -apple-system, sans-serif;
+
+  /* Accents */
+  --str-red: #d9482b;
+  --agi-green: #4fae3a;
+  --int-blue: #3a9ad9;
+  --uni-purple: #c9a45a;
+
+  --enemy-red: #d9482b;
+  --ally-green: #4fae3a;
+  --ban-red: #d9482b;
+  --gold-accent: #c9a45a;
+
+  /* Primary Action Button (Play Dota) */
+  --btn-play-bg: linear-gradient(180deg, #a01820 0%, #7a0f14 100%);
+  --btn-play-border: #d9482b;
+  --btn-play-topborder: #f87171;
 }
 
-body{background:var(--bg);color:var(--text);overflow-x:hidden}
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
 
-.app{
-  font-family:'Rajdhani',sans-serif;
-  min-height:100vh;
-  display:grid;
-  grid-template-rows:56px 1fr auto auto;
-  grid-template-columns:1fr 280px;
-  grid-template-areas:"hdr hdr" "grid panel" "results results" "footer footer";
+body {
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  overflow-x: hidden;
+  min-height: 100vh;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #05080f;
+}
+::-webkit-scrollbar-thumb {
+  background: #1c2738;
+  border-radius: 2px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #2b3d58;
+}
+
+/* App Container with cinematic soft radial glow */
+.dota-app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
   background:
-    radial-gradient(ellipse 60% 40% at 15% 5%,rgba(58,143,212,.06) 0,transparent 100%),
-    radial-gradient(ellipse 50% 30% at 85% 95%,rgba(200,168,75,.05) 0,transparent 100%),
-    var(--bg);
+    radial-gradient(circle at 10% 8%, rgba(28, 51, 80, 0.28) 0%, transparent 45%),
+    radial-gradient(circle at 90% 92%, rgba(28, 51, 80, 0.22) 0%, transparent 50%),
+    linear-gradient(180deg, var(--bg-gradient-top) 0%, var(--bg-base) 100%);
+  position: relative;
 }
 
-/* ── HEADER ── */
-.hdr{
-  grid-area:hdr;
-  display:flex;align-items:center;gap:12px;
-  padding:0 20px;
-  border-bottom:1px solid var(--border);
-  background:rgba(6,8,13,.97);
-  position:sticky;top:0;z-index:100;
-  flex-wrap:nowrap;overflow-x:auto;
-}
-.logo{
-  font-family:'Cinzel',serif;font-size:18px;font-weight:900;
-  letter-spacing:4px;color:var(--gold);
-  text-shadow:0 0 18px rgba(200,168,75,.4);
-  white-space:nowrap;margin-right:4px;
-}
-.logo span{color:#fff}
-.search-wrap{position:relative;flex:1;max-width:240px;min-width:140px}
-.search{
-  width:100%;background:rgba(255,255,255,.04);
-  border:1px solid var(--border);border-radius:2px;
-  padding:6px 12px 6px 30px;color:var(--text);
-  font-family:'Rajdhani',sans-serif;font-size:13px;font-weight:600;
-  letter-spacing:.8px;outline:none;transition:border-color .18s;
-}
-.search:focus{border-color:var(--gold-dim)}
-.search::placeholder{color:var(--dim)}
-.search-ico{position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--dim);font-size:13px;pointer-events:none}
-
-.hdr-btns{display:flex;gap:6px;margin-left:auto;align-items:center}
-.btn{
-  font-family:'Rajdhani',sans-serif;font-size:11px;font-weight:700;
-  letter-spacing:1px;text-transform:uppercase;
-  padding:6px 12px;border:1px solid;border-radius:2px;
-  cursor:pointer;background:transparent;transition:all .18s;
-  white-space:nowrap;
-}
-.btn-enemy{color:var(--red);border-color:var(--red)}
-.btn-enemy.on{background:rgba(200,75,75,.18);box-shadow:0 0 12px rgba(200,75,75,.35)}
-.btn-ally{color:var(--green);border-color:var(--green)}
-.btn-ally.on{background:rgba(75,200,122,.14);box-shadow:0 0 12px rgba(75,200,122,.28)}
-.btn-ban{color:var(--orange);border-color:var(--orange)}
-.btn-ban.on{background:rgba(224,122,63,.2);box-shadow:0 0 12px rgba(224,122,63,.35)}
-.btn-role-aware{color:#5b9bd5;border-color:rgba(91,155,213,.5)}
-.btn-role-aware.on{background:rgba(91,155,213,.2);border-color:#5b9bd5;box-shadow:0 0 12px rgba(91,155,213,.35)}
-.btn-beginner{color:#4bc87a;border-color:rgba(75,200,122,.5)}
-.btn-beginner.on{background:rgba(75,200,122,.2);border-color:#4bc87a;box-shadow:0 0 12px rgba(75,200,122,.35)}
-.btn-suggest{
-  color:#fff;border-color:var(--gold);
-  background:linear-gradient(135deg,rgba(200,168,75,.22),rgba(200,168,75,.06));
-  box-shadow:0 0 10px rgba(200,168,75,.18);
-}
-.btn-suggest:hover:not(:disabled){background:linear-gradient(135deg,rgba(200,168,75,.38),rgba(200,168,75,.14));box-shadow:0 0 20px rgba(200,168,75,.42)}
-.btn-suggest:disabled{opacity:.38;cursor:not-allowed}
-.btn-suggest.spinning{animation:pulse-g .9s infinite}
-@keyframes pulse-g{0%,100%{box-shadow:0 0 10px rgba(200,168,75,.18)}50%{box-shadow:0 0 24px rgba(200,168,75,.55)}}
-.btn-clear{color:var(--gold);border-color:var(--gold-dim)}
-.btn-clear:hover{border-color:var(--gold)}
-
-/* ── GRID ── */
-.grid-area{
-  grid-area:grid;
-  padding:16px 18px;
-  overflow-y:auto;
-}
-.attr-sec{margin-bottom:18px}
-.attr-lbl{
-  font-family:'Cinzel',serif;font-size:9px;letter-spacing:3px;font-weight:700;
-  margin-bottom:8px;display:flex;align-items:center;gap:6px;text-transform:uppercase;
-}
-.attr-line{flex:1;height:1px;opacity:.2}
-
-.hero-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(78px,1fr));gap:6px}
-
-.hcard{
-  position:relative;cursor:pointer;border-radius:3px;overflow:hidden;
-  border:1px solid transparent;
-  transition:transform .13s,box-shadow .13s,border-color .13s;
-  aspect-ratio:16/9;background:#0b0f16;
-}
-.hcard:hover{transform:translateY(-2px) scale(1.05);z-index:3}
-.hcard img{width:100%;height:100%;object-fit:cover;display:block;transition:filter .18s}
-.hcard.gray img{filter:grayscale(1) brightness(.25)}
-.hcard.enemy{border-color:var(--red);box-shadow:0 0 8px rgba(200,75,75,.5)}
-.hcard.ally{border-color:var(--green);box-shadow:0 0 8px rgba(75,200,122,.5)}
-.hcard.ban{border-color:var(--orange);box-shadow:0 0 8px rgba(224,122,63,.5)}
-.hname{
-  position:absolute;bottom:0;left:0;right:0;
-  background:linear-gradient(transparent,rgba(0,0,0,.88));
-  padding:8px 3px 2px;font-size:9px;font-weight:700;
-  letter-spacing:.3px;text-align:center;color:#e0d5bf;line-height:1.2;
-}
-.hcard.gray .hname{color:#222}
-.hbadge{
-  position:absolute;top:2px;right:2px;width:14px;height:14px;
-  border-radius:50%;display:flex;align-items:center;justify-content:center;
-  font-size:7px;font-weight:900;z-index:4;
-}
-.hbadge.e{background:var(--red);color:#fff}
-.hbadge.a{background:var(--green);color:#000}
-.hbadge.b{background:var(--orange);color:#fff}
-
-/* ── PANEL ── */
-.panel{
-  grid-area:panel;
-  border-left:1px solid var(--border);
-  background:rgba(11,15,22,.97);
-  display:flex;flex-direction:column;
-  padding:14px 12px;overflow-y:auto;gap:0;
-}
-.ptitle{
-  font-family:'Cinzel',serif;font-size:9px;letter-spacing:3px;font-weight:700;
-  padding-bottom:6px;border-bottom:1px solid;
-  display:flex;align-items:center;gap:6px;margin-bottom:4px;
-}
-.ptitle.e{color:var(--red);border-color:rgba(200,75,75,.3)}
-.ptitle.a{color:var(--green);border-color:rgba(75,200,122,.3)}
-.ptitle.b{color:var(--orange);border-color:rgba(224,122,63,.3)}
-.pcount{font-size:9px;color:var(--dim);letter-spacing:1px;font-weight:600;margin-bottom:4px}
-.psec{display:flex;flex-direction:column;gap:5px;margin-bottom:14px}
-
-/* ── SLOT ── */
-.slot{
-  display:flex;align-items:center;gap:7px;
-  padding:4px 5px;border-radius:2px;
-  border:1px solid var(--border);background:rgba(255,255,255,.02);
-  min-height:36px;position:relative;
-}
-.slot.fe{border-color:rgba(200,75,75,.38)}
-.slot.fa{border-color:rgba(75,200,122,.3)}
-.slot.fb{border-color:rgba(224,122,63,.35)}
-.slot img{width:42px;height:24px;object-fit:cover;border-radius:2px;flex-shrink:0}
-.slot-info{flex:1;min-width:0}
-.slot-name{font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.slot-attr{font-size:8px;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-top:1px}
-.slot-empty{font-size:9px;color:var(--dim);letter-spacing:1px;font-style:italic}
-.slot-rm{
-  flex-shrink:0;width:20px;height:20px;
-  display:flex;align-items:center;justify-content:center;
-  background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);
-  border-radius:3px;cursor:pointer;color:var(--dim);font-size:11px;
-  transition:all .14s;pointer-events:all;user-select:none;
-}
-.slot-rm:hover{color:#fff;background:rgba(200,75,75,.25);border-color:var(--red)}
-
-.divider{height:1px;background:linear-gradient(90deg,transparent,var(--border),transparent);margin:4px 0 12px}
-
-/* ── RESULTS ── */
-.results{
-  grid-area:results;
-  border-top:1px solid var(--border);
-  padding:20px 22px 28px;
-  background:rgba(6,8,13,.98);
-}
-.res-hdr{
-  display:flex;flex-direction:column;align-items:center;gap:12px;
-  margin-bottom:16px;
-}
-.res-title{
-  font-family:'Cinzel',serif;font-size:13px;letter-spacing:4px;font-weight:700;
-  color:var(--gold);text-shadow:0 0 14px rgba(200,168,75,.35);
-  display:flex;align-items:center;gap:10px;width:100%;
-}
-.res-title::before,.res-title::after{content:'';flex:1;height:1px}
-.res-title::before{background:linear-gradient(90deg,transparent,rgba(200,168,75,.3))}
-.res-title::after{background:linear-gradient(270deg,transparent,rgba(200,168,75,.3))}
-
-.res-controls{
-  display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;
-}
-.role-filter-bar{
-  display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:4px 0;
-}
-.role-pill{
-  font-family:'Rajdhani',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;
-  padding:4px 12px;border-radius:14px;background:rgba(255,255,255,.04);
-  border:1px solid var(--border);color:var(--text);cursor:pointer;transition:all .15s;
-}
-.role-pill:hover{border-color:var(--gold-dim)}
-.role-pill.active{
-  background:rgba(200,168,75,.18);border-color:var(--gold);color:var(--gold);
-  box-shadow:0 0 10px rgba(200,168,75,.25);
+/* ── 1. TOP BAR ───────────────────────────────────────────────────────────── */
+.dota-topbar {
+  height: 50px;
+  background: var(--bg-topbar);
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 28px;
+  position: sticky;
+  top: 0;
+  z-index: 90;
 }
 
-.picks-grid{
-  display:grid;grid-template-columns:repeat(3,1fr);gap:12px;align-items:start;
+/* Dynamic active-mode colored underline */
+.dota-topbar::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 1px;
+  transition: background 200ms ease;
 }
-.pick-card{
-  background:rgba(255,255,255,.03);border:1px solid var(--border);
-  border-radius:5px;overflow:hidden;transition:all .18s;
-  animation:fadeIn .3s ease both;
+.dota-topbar.mode-enemy::after {
+  background: linear-gradient(90deg, transparent, rgba(217, 72, 43, 0.6) 20%, rgba(217, 72, 43, 0.6) 80%, transparent);
 }
-.pick-card:hover{border-color:rgba(200,168,75,.4);transform:translateY(-2px);box-shadow:0 4px 18px rgba(0,0,0,.6)}
-.pick-img-wrap{position:relative;width:100%;aspect-ratio:16/9;overflow:hidden;background:#06080d}
-.pick-img-wrap img{width:100%;height:100%;object-fit:cover;display:block}
-.pick-rank{
-  position:absolute;top:6px;left:6px;background:rgba(0,0,0,.75);
-  border:1px solid var(--border);padding:2px 7px;border-radius:3px;
-  font-family:'Cinzel',serif;font-size:11px;font-weight:900;color:var(--gold);
+.dota-topbar.mode-team::after {
+  background: linear-gradient(90deg, transparent, rgba(79, 174, 58, 0.6) 20%, rgba(79, 174, 58, 0.6) 80%, transparent);
 }
-.pick-score{
-  position:absolute;top:6px;right:6px;background:rgba(0,0,0,.75);
-  border:1px solid var(--border);padding:2px 7px;border-radius:3px;
-  font-size:11px;font-weight:700;color:#4bc87a;
-}
-.pick-score.neg{color:var(--red)}
-.role-badges{position:absolute;bottom:6px;left:6px;display:flex;gap:4px;flex-wrap:wrap}
-.rbadge{
-  font-size:8px;font-weight:700;letter-spacing:1px;text-transform:uppercase;
-  background:rgba(0,0,0,.75);padding:1px 5px;border-radius:2px;
+.dota-topbar.mode-bans::after {
+  background: linear-gradient(90deg, transparent, rgba(217, 72, 43, 0.5) 20%, rgba(217, 72, 43, 0.5) 80%, transparent);
 }
 
-.pick-body{padding:12px}
-.pick-hdr-row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
-.pick-name{font-size:14px;font-weight:700;color:#fff}
-.diff-badge{font-size:9px;font-weight:700;padding:2px 6px;border-radius:2px}
-.diff-badge.easy{background:rgba(75,200,122,.15);color:#4bc87a}
-.diff-badge.moderate{background:rgba(200,168,75,.15);color:#c8a84b}
-.diff-badge.complex{background:rgba(200,75,75,.15);color:#c84b4b}
-
-.pick-meta-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap}
-.conf-badge{
-  font-size:8px;font-weight:700;letter-spacing:1px;text-transform:uppercase;
-  padding:2px 6px;border-radius:10px;border:1px solid;display:inline-flex;align-items:center;gap:4px;
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
 }
-.conf-badge.high{color:#4bc87a;border-color:rgba(75,200,122,.4);background:rgba(75,200,122,.1)}
-.conf-badge.medium{color:#e6b800;border-color:rgba(230,184,0,.4);background:rgba(230,184,0,.1)}
-.conf-badge.low{color:#94a3b8;border-color:rgba(148,163,184,.3);background:rgba(148,163,184,.08)}
-.sample-tag{font-size:9px;color:var(--dim);font-weight:600;display:inline-flex;align-items:center;gap:4px}
 
-.pick-one-liner{
-  display:flex;align-items:flex-start;gap:7px;
-  background:rgba(200,168,75,.09);border:1px solid rgba(200,168,75,.35);
-  border-left:3px solid var(--gold);
-  border-radius:3px;padding:7px 9px;margin-bottom:8px;
-  font-size:11.5px;line-height:1.42;color:#f3ebd8;
+.dota-wordmark {
+  font-family: var(--font-display);
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: 3.5px;
+  color: var(--text-primary);
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  user-select: none;
 }
-.one-liner-ico{font-size:13px;flex-shrink:0;line-height:1.2}
-.one-liner-txt{font-weight:600;letter-spacing:.2px}
 
-.pick-overview{font-size:11px;color:#a8b3cf;line-height:1.4;margin-bottom:8px}
-
-.pick-reasons{display:flex;flex-direction:column;gap:4px;margin-bottom:8px}
-.preason{
-  font-size:10px;font-weight:600;padding:3px 6px;border-radius:2px;
-  background:rgba(255,255,255,.03);border-left:2px solid var(--border);
+.dota-pip {
+  width: 6px;
+  height: 6px;
+  background: var(--str-red);
+  box-shadow: 0 0 8px var(--str-red);
+  border-radius: 1px;
 }
-.preason.counter{border-left-color:var(--red);color:#ff9e9e}
-.preason.synergy{border-left-color:var(--green);color:#a8f0c2}
-.preason.meta{border-left-color:var(--gold);color:#ffd885}
 
-.btn-guide-toggle{
-  width:100%;background:rgba(255,255,255,.04);border:1px solid var(--border);
-  border-radius:3px;padding:6px 8px;color:var(--gold);font-family:'Rajdhani',sans-serif;
-  font-size:10px;font-weight:700;letter-spacing:1px;display:flex;justify-content:space-between;
-  align-items:center;cursor:pointer;margin-top:6px;
+/* Mode Tabs */
+.topbar-tabs {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  margin-left: 20px;
 }
-.btn-guide-toggle:hover{border-color:var(--gold-dim);background:rgba(200,168,75,.08)}
-.btn-guide-toggle .arrow{transition:transform .18s;font-size:8px}
-.btn-guide-toggle.open .arrow{transform:rotate(180deg)}
 
-.guide-details{margin-top:6px;display:flex;flex-direction:column;gap:6px}
-.guide-item{background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.05);border-radius:3px;padding:8px}
-.guide-item-hdr{display:flex;align-items:center;gap:6px;margin-bottom:4px}
-.guide-target-img{width:24px;height:14px;object-fit:cover;border-radius:2px}
-.guide-item-title{font-size:10px;font-weight:700}
-.guide-item-title.role_fit{color:var(--gold)}
-.guide-how{font-size:10px;color:#c0c9df;line-height:1.35;margin-bottom:4px}
-.guide-abilities{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:4px}
-.ability-pill{font-size:9px;background:rgba(255,255,255,.08);padding:1px 5px;border-radius:2px;color:#e2e8f0}
-.guide-tip-box{font-size:10px;color:#ffd885;background:rgba(200,168,75,.08);padding:4px 6px;border-radius:2px;border-left:2px solid var(--gold)}
-
-/* Loading & Error States */
-.state-box{text-align:center;padding:32px 16px;background:rgba(255,255,255,.02);border:1px dashed var(--border);border-radius:4px;margin-top:12px}
-.err-box{background:rgba(200,75,75,.08);border-color:var(--red);color:#ff9e9e}
-.err-title{font-size:13px;font-weight:700;margin-bottom:6px}
-
-/* ── FOOTER ── */
-.app-footer{
-  grid-area:footer;
-  border-top:1px solid var(--border);
-  background:rgba(6,8,13,.99);
-  padding:14px 20px;
-  display:flex;align-items:center;justify-content:space-between;
-  font-size:11px;color:var(--dim);flex-wrap:wrap;gap:12px;
+.mode-tab {
+  background: transparent;
+  border: none;
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 2.2px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  cursor: pointer;
+  padding: 14px 4px;
+  position: relative;
+  transition: color 150ms ease;
+  outline: none;
 }
-.footer-left{display:flex;gap:16px;flex-wrap:wrap;align-items:center}
-.footer-badge{display:inline-flex;align-items:center;gap:5px}
-.footer-right{color:#555}
 
-/* ── MOBILE BAR ── */
-.mobile-bar{
-  display:none;position:fixed;bottom:0;left:0;right:0;z-index:99;
-  background:rgba(6,8,13,.98);border-top:1px solid var(--border);
-  padding:8px 12px;gap:8px;
+.mode-tab:hover {
+  color: #ffffff;
 }
-.mobile-modes{display:flex;gap:4px;flex:1}
 
-@media(max-width:900px){
-  .picks-grid{grid-template-columns:repeat(2,1fr)}
+.mode-tab.active {
+  color: #ffffff;
 }
-@media(max-width:768px){
-  .app{
-    grid-template-columns:1fr;
-    grid-template-areas:"hdr" "panel" "grid" "results" "footer";
-    padding-bottom:56px;
+
+.mode-tab.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  transition: all 180ms ease;
+}
+
+.mode-tab.tab-enemy.active::after {
+  background: var(--enemy-red);
+  box-shadow: 0 0 8px var(--enemy-red);
+}
+.mode-tab.tab-team.active::after {
+  background: var(--ally-green);
+  box-shadow: 0 0 8px var(--ally-green);
+}
+.mode-tab.tab-bans.active::after {
+  background: var(--ban-red);
+  box-shadow: 0 0 8px var(--ban-red);
+}
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+/* Outlined Pill Toggles */
+.pill-toggle {
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  border-radius: 2px;
+  padding: 5px 12px;
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 150ms ease;
+  outline: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  user-select: none;
+}
+
+.pill-toggle:hover {
+  border-color: rgba(207, 227, 255, 0.4);
+  color: var(--text-primary);
+}
+
+.pill-toggle.active {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(207, 227, 255, 0.7);
+  color: #ffffff;
+}
+
+.pill-indicator {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--text-muted);
+}
+.pill-toggle.active .pill-indicator {
+  background: #4fae3a;
+  box-shadow: 0 0 6px #4fae3a;
+}
+
+/* Minimal Underlined Search */
+.search-container {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-bottom: 1px solid var(--border-subtle);
+  padding: 4px 6px;
+  transition: border-color 160ms ease;
+  width: 170px;
+}
+
+.search-container:focus-within {
+  border-bottom-color: rgba(207, 227, 255, 0.7);
+}
+
+.search-icon {
+  font-size: 13px;
+  color: var(--text-secondary);
+  user-select: none;
+}
+
+.search-input {
+  background: transparent;
+  border: none;
+  font-family: var(--font-body);
+  font-size: 12px;
+  color: var(--text-primary);
+  width: 100%;
+  outline: none;
+}
+
+.search-input::placeholder {
+  color: var(--text-muted);
+}
+
+/* ── 2. SUBBAR / BANS ROW ─────────────────────────────────────────────────── */
+.bans-subbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 10px 28px 4px 28px;
+}
+
+.bans-label {
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+}
+
+.bans-slots-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.ban-slot {
+  width: 32px;
+  height: 32px;
+  background: #090e18;
+  border: 1px solid var(--border-subtle);
+  border-radius: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+  transition: border-color 140ms ease;
+}
+
+.ban-slot.empty {
+  color: rgba(125, 141, 161, 0.35);
+  font-size: 13px;
+}
+
+.ban-slot.filled {
+  cursor: pointer;
+  border-color: rgba(217, 72, 43, 0.4);
+}
+
+.ban-slot.filled:hover {
+  border-color: var(--ban-red);
+}
+
+.ban-slot img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center top;
+  filter: grayscale(0.8) brightness(0.6);
+}
+
+/* Red diagonal slash overlay for bans */
+.ban-slash {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    135deg,
+    transparent 42%,
+    rgba(217, 72, 43, 0.9) 46%,
+    rgba(217, 72, 43, 0.9) 54%,
+    transparent 58%
+  );
+}
+
+/* ── 3. MAIN HERO GRID (2x2 ARRANGEMENT) ──────────────────────────────────── */
+.dota-main-area {
+  flex: 1;
+  max-width: 1540px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 8px 32px 140px 32px;
+}
+
+.quadrant-grid-2x2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 36px;
+  row-gap: 24px;
+}
+
+/* Staggered entrance animation (<400ms total) */
+@keyframes dotaFadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
   }
-  .panel{border-left:none;border-bottom:1px solid var(--border);max-height:220px}
-  .picks-grid{grid-template-columns:1fr}
-  .mobile-bar{display:flex}
-  .hdr-btns .btn-suggest{display:none}
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-@keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.attr-quadrant {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.attr-quadrant-0 { animation: dotaFadeInUp 260ms ease-out 0ms both; }
+.attr-quadrant-1 { animation: dotaFadeInUp 260ms ease-out 50ms both; }
+.attr-quadrant-2 { animation: dotaFadeInUp 260ms ease-out 100ms both; }
+.attr-quadrant-3 { animation: dotaFadeInUp 260ms ease-out 150ms both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .attr-quadrant-0, .attr-quadrant-1, .attr-quadrant-2, .attr-quadrant-3 {
+    animation: none !important;
+  }
+}
+
+/* Section Header: small icon + letter-spaced title in attr colour */
+.attr-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 2px;
+}
+
+.attr-icon-img {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+}
+
+.attr-title-text {
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+}
+
+/* 11 Cards per row at desktop target */
+.attr-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(11, minmax(0, 1fr));
+  gap: 5px;
+}
+
+/* ── 4. HERO CARDS (PORTRAIT ~3:5 RATIO) ──────────────────────────────────── */
+.hero-card {
+  aspect-ratio: 3 / 4.7;
+  position: relative;
+  background: var(--bg-card);
+  border: 1px solid var(--border-card);
+  border-radius: 2px;
+  overflow: visible;
+  cursor: pointer;
+  user-select: none;
+  filter: brightness(0.85) saturate(0.9);
+  transition: transform 130ms ease, filter 130ms ease, border-color 130ms ease, box-shadow 130ms ease;
+}
+
+.hero-card-inner {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+  border-radius: 1px;
+}
+
+.hero-card-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center top;
+  display: block;
+  pointer-events: none;
+}
+
+/* Bottom subtle shadow vignette inside card */
+.hero-card-inner::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 25%;
+  background: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.45) 100%);
+  pointer-events: none;
+}
+
+/* Hover State */
+.hero-card:hover {
+  filter: brightness(1) saturate(1);
+  border-color: var(--border-hover);
+  box-shadow: 0 0 10px var(--glow-hover);
+  transform: scale(1.05);
+  z-index: 30;
+}
+
+/* Tooltip on hover (Hero name on hover, no names by default) */
+.hero-card .hero-tooltip {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #090e18;
+  border: 1px solid var(--border-hover);
+  color: #ffffff;
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  padding: 4px 8px;
+  border-radius: 2px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 120ms ease;
+  z-index: 50;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.7);
+}
+
+.hero-card:hover .hero-tooltip {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* Search dimming: non-matching heroes dim to ~20% rather than disappearing */
+.hero-card.dimmed-by-search {
+  opacity: 0.2;
+  filter: grayscale(0.8) brightness(0.5);
+  pointer-events: none;
+}
+
+/* Unavailable: picked or banned when another mode is active */
+.hero-card.unavailable {
+  filter: brightness(0.35) saturate(0.4);
+  cursor: not-allowed;
+}
+
+/* Selected States: Readable without colour alone */
+/* 1. ENEMY SELECTED: Red border + small red X badge top-right */
+.hero-card.selected-enemy {
+  border-color: var(--enemy-red);
+  filter: brightness(1) saturate(1);
+}
+.hero-badge-enemy {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 14px;
+  height: 14px;
+  background: var(--enemy-red);
+  color: #ffffff;
+  font-size: 9px;
+  font-weight: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 1px;
+  z-index: 5;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+}
+
+/* 2. ALLY SELECTED: Green border + check badge top-right */
+.hero-card.selected-ally {
+  border-color: var(--ally-green);
+  filter: brightness(1) saturate(1);
+}
+.hero-badge-ally {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 14px;
+  height: 14px;
+  background: var(--ally-green);
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 1px;
+  z-index: 5;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+}
+
+/* 3. BANNED: Grayscale, darkened, with a red diagonal slash */
+.hero-card.selected-banned {
+  filter: grayscale(1) brightness(0.35);
+  border-color: rgba(217, 72, 43, 0.6);
+}
+
+/* Roles ON: Small role glyph chips in corner of card, tiny & muted */
+.role-glyph-chip {
+  position: absolute;
+  bottom: 2px;
+  left: 2px;
+  font-family: var(--font-display);
+  font-size: 9px;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(0, 0, 0, 0.65);
+  padding: 1px 3px;
+  border-radius: 1px;
+  line-height: 1;
+  z-index: 4;
+}
+
+/* Beginner ON: Small "easy" marker (subtle gold dot/ribbon) */
+.beginner-marker {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 6px;
+  height: 6px;
+  background: var(--gold-accent);
+  border-radius: 50%;
+  box-shadow: 0 0 5px var(--gold-accent);
+  z-index: 4;
+}
+
+/* ── 5. DRAFT DOCK (FIXED IN-GAME PARTY BAR REPLACEMENT) ───────────────────── */
+.dota-draft-dock {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 74px;
+  background: var(--bg-dock);
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 32px;
+  z-index: 80;
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.5);
+}
+
+.dock-left-teams {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+/* ENEMY Group: 5 slots, red-tinted frame */
+.dock-team-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 12px;
+  border-radius: 2px;
+  border: 1px solid var(--border-subtle);
+}
+
+.dock-team-group.enemy-frame {
+  border-color: rgba(217, 72, 43, 0.28);
+  background: rgba(217, 72, 43, 0.04);
+}
+
+.dock-team-group.ally-frame {
+  border-color: rgba(79, 174, 58, 0.28);
+  background: rgba(79, 174, 58, 0.04);
+}
+
+.dock-team-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dock-team-label {
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+.dock-team-group.enemy-frame .dock-team-label {
+  color: var(--enemy-red);
+}
+.dock-team-group.ally-frame .dock-team-label {
+  color: var(--ally-green);
+}
+
+.dock-team-count {
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.dock-slots-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dock-slot {
+  width: 44px;
+  height: 58px;
+  background: #060910;
+  border: 1px dashed rgba(125, 141, 161, 0.25);
+  border-radius: 2px;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 130ms ease;
+}
+
+.dock-slot.empty {
+  color: var(--text-muted);
+  font-family: var(--font-display);
+  font-size: 13px;
+}
+
+.dock-slot.filled {
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  cursor: pointer;
+}
+
+.dock-slot.filled:hover {
+  border-color: #ffffff;
+}
+
+.dock-slot img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center top;
+}
+
+.dock-slot-remove {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.dock-slot.filled:hover .dock-slot-remove {
+  opacity: 1;
+}
+
+/* Actions Group: Suggest Picks (Play Dota button) & Ghost Clear */
+.dock-right-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.btn-ghost-clear {
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  padding: 10px 16px;
+  border-radius: 2px;
+  cursor: pointer;
+  text-transform: uppercase;
+  transition: all 150ms ease;
+  outline: none;
+}
+
+.btn-ghost-clear:hover {
+  border-color: var(--text-primary);
+  color: var(--text-primary);
+}
+
+.btn-play-dota {
+  background: var(--btn-play-bg);
+  border: 1px solid var(--btn-play-border);
+  border-top: 1px solid var(--btn-play-topborder);
+  border-radius: 2px;
+  padding: 12px 32px;
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 2.2px;
+  color: #ffffff;
+  text-transform: uppercase;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 3px 14px rgba(160, 24, 32, 0.45);
+  transition: all 150ms ease;
+  outline: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-play-dota:hover:not(:disabled) {
+  filter: brightness(1.15);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 4px 20px rgba(217, 72, 43, 0.6);
+  transform: translateY(-1px);
+}
+
+.btn-play-dota:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* ── 6. SUGGESTED PICKS SLIDE-UP PANEL (ABOVE DOCK) ────────────────────────── */
+.recs-slideup-panel {
+  position: fixed;
+  bottom: 74px;
+  left: 0;
+  right: 0;
+  max-height: 72vh;
+  background: #090e18;
+  border-top: 1px solid rgba(207, 227, 255, 0.25);
+  border-bottom: 1px solid var(--border-subtle);
+  box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.8);
+  z-index: 75;
+  display: flex;
+  flex-direction: column;
+  animation: slideUpPanel 200ms ease-out both;
+}
+
+@keyframes slideUpPanel {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.recs-panel-header {
+  height: 52px;
+  background: #0c1322;
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 32px;
+  flex-shrink: 0;
+}
+
+.recs-header-left {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.recs-title {
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: var(--text-primary);
+  text-transform: uppercase;
+}
+
+.recs-role-tabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.recs-role-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  padding: 4px 10px;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: all 140ms ease;
+}
+
+.recs-role-btn:hover {
+  color: #ffffff;
+}
+
+.recs-role-btn.active {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(207, 227, 255, 0.4);
+  color: #ffffff;
+}
+
+.btn-close-panel {
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  font-size: 13px;
+  width: 26px;
+  height: 26px;
+  border-radius: 2px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 130ms ease;
+}
+
+.btn-close-panel:hover {
+  border-color: #ffffff;
+  color: #ffffff;
+}
+
+.recs-scroll-body {
+  overflow-y: auto;
+  padding: 20px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.recs-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+  gap: 14px;
+}
+
+.rec-card {
+  background: #0b111e;
+  border: 1px solid var(--border-subtle);
+  border-radius: 2px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: border-color 140ms ease;
+}
+
+.rec-card:hover {
+  border-color: rgba(207, 227, 255, 0.45);
+}
+
+.rec-card-top {
+  display: flex;
+  gap: 12px;
+  padding: 10px;
+  background: rgba(0, 0, 0, 0.25);
+  border-bottom: 1px solid rgba(125, 141, 161, 0.08);
+}
+
+.rec-thumb {
+  width: 50px;
+  height: 68px;
+  border-radius: 1px;
+  object-fit: cover;
+  object-position: center top;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  flex-shrink: 0;
+}
+
+.rec-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+}
+
+.rec-name-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.rec-hero-name {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: #ffffff;
+}
+
+.rec-rank-tag {
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--gold-accent);
+}
+
+.rec-badges-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.rec-advantage-pill {
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: #4fae3a;
+}
+
+.rec-diff-pill {
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 1px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-secondary);
+}
+
+.rec-card-body {
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+}
+
+.rec-verdict-box {
+  background: rgba(0, 0, 0, 0.35);
+  border-left: 2px solid var(--gold-accent);
+  padding: 6px 8px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: #cbd5e1;
+}
+
+.rec-drawer-toggle {
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  padding: 4px 8px;
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  cursor: pointer;
+  border-radius: 1px;
+  margin-top: auto;
+  transition: all 130ms ease;
+}
+
+.rec-drawer-toggle:hover {
+  border-color: var(--text-primary);
+  color: var(--text-primary);
+}
+
+.rec-drawer-expanded {
+  margin-top: 6px;
+  padding: 8px;
+  background: #070b13;
+  border: 1px solid var(--border-subtle);
+  border-radius: 1px;
+  font-size: 11px;
+  line-height: 1.45;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tip-box {
+  background: rgba(79, 174, 58, 0.08);
+  border-left: 2px solid var(--ally-green);
+  padding: 5px 8px;
+  color: #a7f3d0;
+}
+
+/* Responsive adjustments */
+@media (max-width: 1400px) {
+  .attr-cards-grid {
+    grid-template-columns: repeat(9, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1024px) {
+  .quadrant-grid-2x2 {
+    grid-template-columns: 1fr;
+  }
+  .attr-cards-grid {
+    grid-template-columns: repeat(11, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .attr-cards-grid {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+  }
+  .dota-draft-dock {
+    flex-direction: column;
+    height: auto;
+    padding: 10px;
+    gap: 10px;
+  }
+  .dock-left-teams {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+}
 `;
 
 export default function Dota2Drafter() {
-  const [heroesList,     setHeroesList]      = useState(INITIAL_HEROES);
-  const [mode,           setMode]            = useState("enemy"); // enemy | team | bans
-  const [enemy,          setEnemy]           = useState([]);      // numeric hero IDs
-  const [team,           setTeam]            = useState([]);
-  const [bans,           setBans]            = useState([]);
-  const [search,         setSearch]          = useState("");
-  const [picks,          setPicks]           = useState(null);
-  const [categories,     setCategories]      = useState(null);
-  const [loading,        setLoading]         = useState(false);
-  const [apiErr,         setApiErr]          = useState("");
-  const [beginnerOnly,   setBeginnerOnly]    = useState(false);
-  const [roleAware,      setRoleAware]       = useState(false);
-  const [selectedRole,   setSelectedRole]    = useState("all");
-  const [bracket,        setBracket]         = useState("all");
-  const [healthInfo,     setHealthInfo]      = useState(null);
-  const [expandedCardIds,setExpandedCardIds] = useState(new Set());
-  const styleRef = useRef(false);
+  const [heroesList, setHeroesList] = useState(INITIAL_HEROES);
+  const [search, setSearch] = useState("");
 
+  // Mode: 'enemy' | 'team' | 'bans'
+  const [mode, setMode] = useState("enemy");
+
+  // Selection states
+  const [enemy, setEnemy] = useState([]);
+  const [team, setTeam] = useState([]);
+  const [bans, setBans] = useState([]);
+
+  // Toggles
+  const [roleAware, setRoleAware] = useState(true);
+  const [beginnerOnly, setBeginnerOnly] = useState(false);
+
+  // Recommendations state
+  const [picks, setPicks] = useState(null);
+  const [categories, setCategories] = useState(null);
+  const [selectedRole, setSelectedRole] = useState("all");
+  const [showRecsPanel, setShowRecsPanel] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [apiErr, setApiErr] = useState("");
+  const [expandedCardIds, setExpandedCardIds] = useState(new Set());
+
+  const searchInputRef = useRef(null);
+  const styleInjected = useRef(false);
+
+  // Inject CSS once
   useEffect(() => {
-    if (styleRef.current) return;
-    styleRef.current = true;
+    if (styleInjected.current) return;
+    styleInjected.current = true;
     const s = document.createElement("style");
-    s.id = "d2-css"; s.textContent = CSS;
+    s.id = "dota2-drafter-ingame-client-css";
+    s.textContent = CSS;
     document.head.appendChild(s);
   }, []);
 
-  // Fetch dynamic heroes list and data freshness in parallel on mount
+  // Fetch /heroes from backend if available
   useEffect(() => {
-    // 1. Fetch health and data freshness immediately
-    fetch(`${API}/health`)
-      .then(res => res.ok ? res.json() : null)
-      .then(hData => {
-        if (hData) setHealthInfo(hData);
-      })
-      .catch(e => {
-        console.warn("Failed to load /health:", e);
-      });
-
-    // 2. Fetch heroes metadata concurrently
     fetch(`${API}/heroes`)
-      .then(res => res.ok ? res.json() : null)
-      .then(data => {
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
         if (Array.isArray(data) && data.length > 0) {
-          const mapped = data.map(h => ({
+          const mapped = data.map((h) => ({
             id: h.id,
             name: h.name,
             img: h.short_name || h.name.toLowerCase().replace(/ /g, "_").replace(/'/g, ""),
-            attr: h.attribute === "str" ? "strength" :
-                  h.attribute === "agi" ? "agility" :
-                  h.attribute === "int" ? "intelligence" : "universal",
+            attr:
+              h.attribute === "str"
+                ? "strength"
+                : h.attribute === "agi"
+                ? "agility"
+                : h.attribute === "int"
+                ? "intelligence"
+                : "universal",
             roles: h.roles || [],
-            image_url: h.image_url
+            image_url: h.image_url,
           }));
           setHeroesList(mapped);
         }
       })
-      .catch(e => {
-        console.warn("Failed to load /heroes, using initial fallback:", e);
-      });
+      .catch((e) => console.warn("Failed to load /heroes, using fallback:", e));
   }, []);
 
-  const allSel = useMemo(() => new Set([...enemy, ...team, ...bans]), [enemy, team, bans]);
+  // Keyboard navigation & shortcuts:
+  // '/' focuses search
+  // 'Esc' clears search or closes recommendations panel
+  // '1' switches to enemy mode
+  // '2' switches to ally mode
+  // '3' switches to ban mode
+  useEffect(() => {
+    function handleKeyDown(e) {
+      // If typing in search, only allow Esc
+      if (e.target.tagName === "INPUT") {
+        if (e.key === "Escape") {
+          setSearch("");
+          e.target.blur();
+        }
+        return;
+      }
 
-  const filtered = useMemo(() => {
-    const q = search.toLowerCase().trim();
-    return q ? heroesList.filter(h => h.name.toLowerCase().includes(q)) : heroesList;
-  }, [search, heroesList]);
+      if (e.key === "/") {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      } else if (e.key === "Escape") {
+        if (search) setSearch("");
+        if (showRecsPanel) setShowRecsPanel(false);
+      } else if (e.key === "1") {
+        setMode("enemy");
+      } else if (e.key === "2") {
+        setMode("team");
+      } else if (e.key === "3") {
+        setMode("bans");
+      }
+    }
 
-  const grouped = useMemo(() => {
-    const g = {};
-    ATTR_ORDER.forEach(a => { g[a] = []; });
-    filtered.forEach(h => {
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [search, showRecsPanel]);
+
+  // Lookup map
+  const heroById = useMemo(() => {
+    const map = new Map();
+    heroesList.forEach((h) => map.set(h.id, h));
+    return (id) => map.get(id);
+  }, [heroesList]);
+
+  // 2x2 Quadrants data grouped by attribute
+  const quadrantsData = useMemo(() => {
+    const q = { strength: [], agility: [], intelligence: [], universal: [] };
+    heroesList.forEach((h) => {
       const a = h.attr || "universal";
-      if (g[a]) g[a].push(h);
+      if (q[a]) q[a].push(h);
     });
-    return g;
-  }, [filtered]);
+    return q;
+  }, [heroesList]);
 
-  function heroById(id) {
-    return heroesList.find(h => h.id === id);
+  // All selected hero IDs
+  const allSelectedIds = useMemo(() => {
+    return new Set([...enemy, ...team, ...bans]);
+  }, [enemy, team, bans]);
+
+  // Click handler on hero card
+  function handleHeroClick(hero) {
+    const id = hero.id;
+
+    // Toggle off if already selected in any group
+    if (enemy.includes(id)) {
+      setEnemy((prev) => prev.filter((x) => x !== id));
+      return;
+    }
+    if (team.includes(id)) {
+      setTeam((prev) => prev.filter((x) => x !== id));
+      return;
+    }
+    if (bans.includes(id)) {
+      setBans((prev) => prev.filter((x) => x !== id));
+      return;
+    }
+
+    // Add to active mode
+    if (mode === "enemy" && enemy.length < MAX_ENEMY) {
+      setEnemy((prev) => [...prev, id]);
+    } else if (mode === "team" && team.length < MAX_ALLY) {
+      setTeam((prev) => [...prev, id]);
+    } else if (mode === "bans" && bans.length < MAX_BANS) {
+      setBans((prev) => [...prev, id]);
+    }
   }
 
-  function handleHero(hero) {
-    const id = hero.id;
-    // If already in any list, remove it
-    if (enemy.includes(id)) { setEnemy(e => e.filter(x => x !== id)); return; }
-    if (team.includes(id))  { setTeam(t  => t.filter(x => x !== id)); return; }
-    if (bans.includes(id))  { setBans(b  => b.filter(x => x !== id)); return; }
+  function rmEnemy(id) { setEnemy((prev) => prev.filter((x) => x !== id)); }
+  function rmTeam(id)  { setTeam((prev) => prev.filter((x) => x !== id)); }
+  function rmBan(id)   { setBans((prev) => prev.filter((x) => x !== id)); }
 
-    // Add to active selection mode
-    if (mode === "enemy" && enemy.length < MAX_ENEMY) setEnemy(e => [...e, id]);
-    if (mode === "team"  && team.length  < MAX_ALLY)  setTeam(t  => [...t, id]);
-    if (mode === "bans"  && bans.length  < MAX_BANS)  setBans(b  => [...b, id]);
-
+  function clearAll() {
+    setEnemy([]);
+    setTeam([]);
+    setBans([]);
     setPicks(null);
     setCategories(null);
+    setShowRecsPanel(false);
     setApiErr("");
   }
 
-  function rmEnemy(id) { setEnemy(prev => prev.filter(x => x !== id)); setPicks(null); setCategories(null); }
-  function rmTeam(id)  { setTeam(prev => prev.filter(x => x !== id));  setPicks(null); setCategories(null); }
-  function rmBan(id)   { setBans(prev => prev.filter(x => x !== id));  setPicks(null); setCategories(null); }
-
-  function clearAll() {
-    setEnemy([]); setTeam([]); setBans([]);
-    setPicks(null); setCategories(null); setApiErr(""); setExpandedCardIds(new Set());
-  }
-
-  function toggleCardGuide(id) {
-    setExpandedCardIds(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
-
+  // Suggest picks API call
   async function handleSuggest() {
     if (!enemy.length && !team.length) return;
-    setLoading(true); setApiErr(""); setPicks(null); setCategories(null);
+    setLoading(true);
+    setApiErr("");
+    setShowRecsPanel(true);
 
-    const targetRoleNeeded = (selectedRole === "soft_support" || selectedRole === "hard_support")
-      ? "support"
-      : (selectedRole !== "all" ? selectedRole : null);
+    const targetRoleNeeded =
+      selectedRole === "soft_support" || selectedRole === "hard_support"
+        ? "support"
+        : selectedRole !== "all"
+        ? selectedRole
+        : null;
 
     const payload = {
-      enemy: enemy,
-      team: team,
-      bans: bans,
+      enemy,
+      team,
+      bans,
       role_aware: roleAware,
       roles_needed: targetRoleNeeded ? [targetRoleNeeded] : null,
-      bracket: bracket
+      bracket: "all",
     };
 
     try {
@@ -511,476 +1373,490 @@ export default function Dota2Drafter() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
+
       if (!res.ok) {
         const errJson = await res.json().catch(() => ({}));
-        const details = Array.isArray(errJson.details) ? ` - ${errJson.details.join("; ")}` : "";
-        const msg = (errJson.message || errJson.detail || `Server error (${res.status})`) + details;
-        throw new Error(msg);
+        throw new Error(errJson.message || errJson.detail || `Server error (${res.status})`);
       }
+
       const data = await res.json();
-      const resPicks = data.picks || [];
-      setPicks(resPicks);
+      setPicks(data.picks || []);
       setCategories(data.categories || null);
-      if (resPicks.length > 0) {
-        setExpandedCardIds(new Set([resPicks[0].id]));
+      if (data.picks && data.picks.length > 0) {
+        setExpandedCardIds(new Set([data.picks[0].id]));
       }
-      setTimeout(() => {
-        const el = document.getElementById("results-section");
-        if (el) el.scrollIntoView({ behavior: "smooth" });
-      }, 120);
-    } catch(e) {
-      setApiErr(`${e.message}`);
+    } catch (e) {
+      setApiErr(e.message);
     } finally {
       setLoading(false);
     }
   }
 
+  // Filter recommendations by selected role tab & beginner toggle
   const displayedPicks = useMemo(() => {
-    if (!picks && !categories) return null;
+    if (!picks && !categories) return [];
     let list = [];
     if (categories && categories[selectedRole]) {
       list = categories[selectedRole];
     } else if (picks) {
-      list = selectedRole === "all"
-        ? picks
-        : picks.filter(p => {
-            const rList = (p.roles || []).map(r => r.toLowerCase());
-            if (rList.includes(selectedRole)) return true;
-            if ((selectedRole === "soft_support" || selectedRole === "hard_support") && rList.includes("support")) return true;
-            return false;
-          });
+      if (selectedRole === "all") {
+        list = picks;
+      } else {
+        list = picks.filter((p) => {
+          const rList = (p.roles || []).map((r) => r.toLowerCase());
+          if (rList.includes(selectedRole)) return true;
+          if (
+            (selectedRole === "soft_support" || selectedRole === "hard_support") &&
+            rList.includes("support")
+          )
+            return true;
+          return false;
+        });
+      }
     }
+
     if (beginnerOnly) {
-      list = list.filter(p => (p.difficulty || "Easy") === "Easy");
+      list = list.filter((p) => {
+        const comp = HERO_COMPLEXITY[p.name] || 2;
+        return comp === 1 || (p.difficulty || "Easy") === "Easy";
+      });
     }
+
     return list;
-  }, [picks, categories, beginnerOnly, selectedRole]);
+  }, [picks, categories, selectedRole, beginnerOnly]);
 
   const enemyHeroes = enemy.map(heroById).filter(Boolean);
   const teamHeroes  = team.map(heroById).filter(Boolean);
   const banHeroes   = bans.map(heroById).filter(Boolean);
   const canSuggest  = enemy.length > 0 || team.length > 0;
 
-  function scoreColor(s) { return s >= 0 ? "" : "neg"; }
-
-  function reasonClass(r) {
-    if (r.startsWith("Counters") || r.startsWith("Even") || r.startsWith("Matchup")) return "counter";
-    if (r.startsWith("Synergy"))  return "synergy";
-    if (r.startsWith("Meta") || r.startsWith("Role Fit") || r.startsWith("Fills"))     return "meta";
-    return "";
+  // Search filter helper: does this hero match current search?
+  function isHeroSearchMatch(hero) {
+    if (!search.trim()) return true;
+    const s = search.toLowerCase().trim();
+    const matchName = hero.name.toLowerCase().includes(s);
+    const matchRole = (hero.roles || []).some((r) => r.toLowerCase().includes(s));
+    return matchName || matchRole;
   }
 
   return (
-    <div className="app">
-      {/* HEADER */}
-      <header className="hdr">
-        <div className="logo">DOTA<span>2</span> DRAFTER</div>
+    <div className="dota-app">
+      {/* ── 1. TOP BAR ────────────────────────────────────────────────────── */}
+      <header className={`dota-topbar mode-${mode}`}>
+        <div className="topbar-left">
+          <div className="dota-wordmark">
+            <span className="dota-pip" />
+            DRAFTER
+          </div>
 
-        <div className="search-wrap">
-          <span className="search-ico">⌕</span>
-          <input
-            className="search"
-            placeholder="Search hero..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
+          <nav className="topbar-tabs">
+            <button
+              className={`mode-tab tab-enemy${mode === "enemy" ? " active" : ""}`}
+              onClick={() => setMode("enemy")}
+              title="Shortcut: 1"
+            >
+              ENEMY ({enemy.length}/{MAX_ENEMY})
+            </button>
+            <button
+              className={`mode-tab tab-team${mode === "team" ? " active" : ""}`}
+              onClick={() => setMode("team")}
+              title="Shortcut: 2"
+            >
+              ALLY ({team.length}/{MAX_ALLY})
+            </button>
+            <button
+              className={`mode-tab tab-bans${mode === "bans" ? " active" : ""}`}
+              onClick={() => setMode("bans")}
+              title="Shortcut: 3"
+            >
+              BAN ({bans.length}/{MAX_BANS})
+            </button>
+          </nav>
         </div>
 
-        <div className="hdr-btns">
+        <div className="topbar-right">
+          {/* Roles Toggle */}
           <button
-            className={`btn btn-enemy${mode==="enemy" ? " on" : ""}`}
-            onClick={() => setMode("enemy")}
-          >✕ Enemy ({enemy.length}/{MAX_ENEMY})</button>
-
-          <button
-            className={`btn btn-ally${mode==="team" ? " on" : ""}`}
-            onClick={() => setMode("team")}
-          >✓ Ally ({team.length}/{MAX_ALLY})</button>
-
-          <button
-            className={`btn btn-ban${mode==="bans" ? " on" : ""}`}
-            onClick={() => setMode("bans")}
-          >🚫 Ban ({bans.length}/{MAX_BANS})</button>
-
-          <button
-            className={`btn btn-role-aware${roleAware ? " on" : ""}`}
-            onClick={() => setRoleAware(r => !r)}
+            className={`pill-toggle${roleAware ? " active" : ""}`}
+            onClick={() => setRoleAware((r) => !r)}
             title="Auto-fill missing team positions"
-          >🎯 Roles {roleAware ? "ON" : "OFF"}</button>
+          >
+            <span className="pill-indicator" />
+            ROLES {roleAware ? "ON" : "OFF"}
+          </button>
 
+          {/* Beginner Toggle */}
           <button
-            className={`btn btn-beginner${beginnerOnly ? " on" : ""}`}
-            onClick={() => setBeginnerOnly(b => !b)}
-            title="Filter to beginner-friendly heroes only"
-          >🐣 Beginner {beginnerOnly ? "ON" : "OFF"}</button>
+            className={`pill-toggle${beginnerOnly ? " active" : ""}`}
+            onClick={() => setBeginnerOnly((b) => !b)}
+            title="Highlight beginner-friendly heroes"
+          >
+            <span className="pill-indicator" />
+            BEGINNER {beginnerOnly ? "ON" : "OFF"}
+          </button>
 
-          <button
-            className={`btn btn-suggest${loading ? " spinning" : ""}`}
-            onClick={handleSuggest}
-            disabled={!canSuggest || loading}
-          >{loading ? "⟳ Analyzing…" : "🔥 Suggest Picks"}</button>
-
-          <button className="btn btn-clear" onClick={clearAll}>↺ Clear</button>
+          {/* Minimal Underlined Search */}
+          <div className="search-container">
+            <span className="search-icon">⌕</span>
+            <input
+              ref={searchInputRef}
+              className="search-input"
+              type="text"
+              placeholder="Search hero... (/)"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
         </div>
       </header>
 
-      {/* HERO GRID */}
-      <main className="grid-area">
-        {filtered.length === 0 && (
-          <div className="no-res" style={{padding:"24px",color:"#777",textAlign:"center"}}>
-            No heroes match "{search}"
-          </div>
-        )}
-        {ATTR_ORDER.map(attr => {
-          const heroes = grouped[attr] || [];
-          if (!heroes.length) return null;
-          const m = ATTR_META[attr];
-          return (
-            <div className="attr-sec" key={attr}>
-              <div className="attr-lbl" style={{ color: m.color }}>
-                <span>{m.icon} {attr.toUpperCase()}</span>
-                <span className="attr-line" style={{
-                  background: `linear-gradient(90deg,${m.color},transparent)`
-                }}/>
+      {/* ── 2. BANS ROW (RIGHT-ALIGNED UNDER TOP BAR) ─────────────────────── */}
+      <div className="bans-subbar">
+        <span className="bans-label">BANS</span>
+        <div className="bans-slots-row">
+          {Array.from({ length: MAX_BANS }).map((_, i) => {
+            const h = banHeroes[i];
+            return h ? (
+              <div
+                key={h.id}
+                className="ban-slot filled"
+                onClick={() => rmBan(h.id)}
+                title={`Banned: ${h.name} (Click to remove)`}
+              >
+                <img
+                  src={getHeroPortraitUrl(h)}
+                  alt={h.name}
+                  onError={(e) => {
+                    e.target.src = h.image_url || `https://cdn.cloudflare.steamstatic.com/apps/dota2/images/heroes/${h.img}_full.png`;
+                  }}
+                />
+                <div className="ban-slash" />
               </div>
-              <div className="hero-grid">
-                {heroes.map(hero => {
-                  const isE  = enemy.includes(hero.id);
-                  const isA  = team.includes(hero.id);
-                  const isB  = bans.includes(hero.id);
-                  const gray = allSel.has(hero.id);
-                  return (
-                    <div
-                      key={hero.id}
-                      className={["hcard", gray?"gray":"", isE?"enemy":"", isA?"ally":"", isB?"ban":""].filter(Boolean).join(" ")}
-                      onClick={() => handleHero(hero)}
-                      title={hero.name}
-                    >
-                      <img
-                        src={hero.image_url || IMG(hero.img)}
-                        alt={hero.name}
-                        loading="lazy"
-                        onError={e => { e.target.src="https://via.placeholder.com/78x44/0b0f16/333?text=?"; }}
-                      />
-                      <div className="hname">{hero.name}</div>
-                      {isE && <div className="hbadge e">✕</div>}
-                      {isA && <div className="hbadge a">✓</div>}
-                      {isB && <div className="hbadge b">🚫</div>}
-                    </div>
-                  );
-                })}
+            ) : (
+              <div key={i} className="ban-slot empty" title="Empty Ban Slot">
+                ⊘
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ── 3. MAIN HERO GRID (2x2 ARRANGEMENT) ───────────────────────────── */}
+      <main className="dota-main-area">
+        <div className="quadrant-grid-2x2">
+          {ATTR_ORDER.map((attr, qIdx) => {
+            const heroes = quadrantsData[attr] || [];
+            const meta = HERO_ATTRIBUTES_META[attr];
+            return (
+              <section className={`attr-quadrant attr-quadrant-${qIdx}`} key={attr}>
+                <div className="attr-header">
+                  <img className="attr-icon-img" src={meta.icon} alt={meta.title} />
+                  <span className="attr-title-text" style={{ color: meta.color }}>
+                    {meta.title}
+                  </span>
+                </div>
+
+                <div className="attr-cards-grid">
+                  {heroes.map((hero) => {
+                    const isEnemy = enemy.includes(hero.id);
+                    const isAlly  = team.includes(hero.id);
+                    const isBanned = bans.includes(hero.id);
+                    const isAnySelected = allSelectedIds.has(hero.id);
+
+                    // Unavailable if selected in another mode
+                    const isUnavailable =
+                      isAnySelected &&
+                      ((mode === "enemy" && !isEnemy) ||
+                       (mode === "team"  && !isAlly)  ||
+                       (mode === "bans"  && !isBanned));
+
+                    const matchesSearch = isHeroSearchMatch(hero);
+                    const posNum = HERO_PRIMARY_POS[hero.name] || 1;
+                    const isBeginner = (HERO_COMPLEXITY[hero.name] || 2) === 1;
+
+                    const cardClasses = [
+                      "hero-card",
+                      !matchesSearch ? "dimmed-by-search" : "",
+                      isUnavailable ? "unavailable" : "",
+                      isEnemy ? "selected-enemy" : "",
+                      isAlly ? "selected-ally" : "",
+                      isBanned ? "selected-banned" : "",
+                    ].filter(Boolean).join(" ");
+
+                    return (
+                      <div
+                        key={hero.id}
+                        className={cardClasses}
+                        onClick={() => handleHeroClick(hero)}
+                      >
+                        <div className="hero-card-inner">
+                          <img
+                            className="hero-card-img"
+                            src={getHeroPortraitUrl(hero)}
+                            alt={hero.name}
+                            loading="lazy"
+                            onError={(e) => {
+                              if (!e.target.dataset.triedVert) {
+                                e.target.dataset.triedVert = "true";
+                                e.target.src = `https://cdn.cloudflare.steamstatic.com/apps/dota2/images/heroes/${hero.img}_vert.jpg`;
+                              } else if (!e.target.dataset.triedFallback) {
+                                e.target.dataset.triedFallback = "true";
+                                e.target.src = hero.image_url || `https://cdn.cloudflare.steamstatic.com/apps/dota2/images/heroes/${hero.img}_full.png`;
+                              }
+                            }}
+                          />
+
+                          {/* Banned Red Slash Overlay */}
+                          {isBanned && <div className="ban-slash" />}
+
+                          {/* Enemy Badge: Red X top-right */}
+                          {isEnemy && <div className="hero-badge-enemy">✕</div>}
+
+                          {/* Ally Badge: Green Check top-right */}
+                          {isAlly && <div className="hero-badge-ally">✓</div>}
+
+                          {/* Roles ON: Small role glyph chip bottom-left */}
+                          {roleAware && (
+                            <div className="role-glyph-chip" title={`Pos ${posNum}`}>
+                              {posNum}
+                            </div>
+                          )}
+
+                          {/* Beginner ON: Gold dot marker top-left */}
+                          {beginnerOnly && isBeginner && (
+                            <div className="beginner-marker" title="Beginner Friendly" />
+                          )}
+                        </div>
+
+                        {/* Hover Tooltip (Hero name on hover, no text on card by default) */}
+                        <div className="hero-tooltip">
+                          {hero.name}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            );
+          })}
+        </div>
       </main>
 
-      {/* SIDE PANEL / MOBILE DOCK */}
-      <aside className="panel">
-        {/* Enemy */}
-        <div className="psec">
-          <div className="psec-hdr">
-            <div className="ptitle e">✕ ENEMY TEAM</div>
-            <div className="pcount">{enemyHeroes.length} / {MAX_ENEMY} selected</div>
-          </div>
-          <div className="slots-list">
-            {Array.from({length: MAX_ENEMY}).map((_, i) => {
-              const h = enemyHeroes[i];
-              return h ? (
-                <div key={h.id} className="slot fe">
-                  <img src={h.image_url || IMG(h.img)} alt={h.name} onError={e => e.target.style.display="none"} />
-                  <div className="slot-info">
-                    <div className="slot-name">{h.name}</div>
-                    <div className="slot-attr" style={{color:ATTR_META[h.attr]?.color}}>{h.attr}</div>
-                  </div>
-                  <div className="slot-rm" onClick={(e) => { e.stopPropagation(); rmEnemy(h.id); }} title="Remove">✕</div>
-                </div>
-              ) : (
-                <div key={i} className="slot"><span className="slot-empty">—</span></div>
-              );
-            })}
-          </div>
-        </div>
+      {/* ── 4. SUGGESTED PICKS SLIDE-UP PANEL (ABOVE DOCK) ────────────────── */}
+      {showRecsPanel && (
+        <section className="recs-slideup-panel">
+          <div className="recs-panel-header">
+            <div className="recs-header-left">
+              <span className="recs-title">TACTICAL COUNTER PICKS</span>
 
-        <div className="divider"/>
-
-        {/* Ally */}
-        <div className="psec">
-          <div className="psec-hdr">
-            <div className="ptitle a">✓ YOUR ALLIES</div>
-            <div className="pcount">{teamHeroes.length} / {MAX_ALLY} selected</div>
-          </div>
-          <div className="slots-list">
-            {Array.from({length: MAX_ALLY}).map((_, i) => {
-              const h = teamHeroes[i];
-              return h ? (
-                <div key={h.id} className="slot fa">
-                  <img src={h.image_url || IMG(h.img)} alt={h.name} onError={e => e.target.style.display="none"} />
-                  <div className="slot-info">
-                    <div className="slot-name">{h.name}</div>
-                    <div className="slot-attr" style={{color:ATTR_META[h.attr]?.color}}>{h.attr}</div>
-                  </div>
-                  <div className="slot-rm" onClick={(e) => { e.stopPropagation(); rmTeam(h.id); }} title="Remove">✕</div>
-                </div>
-              ) : (
-                <div key={i} className="slot"><span className="slot-empty">—</span></div>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="divider"/>
-
-        {/* Bans */}
-        <div className="psec">
-          <div className="psec-hdr">
-            <div className="ptitle b">🚫 BANS</div>
-            <div className="pcount">{banHeroes.length} / {MAX_BANS} banned</div>
-          </div>
-          <div className="slots-list">
-            {Array.from({length: MAX_BANS}).map((_, i) => {
-              const h = banHeroes[i];
-              return h ? (
-                <div key={h.id} className="slot fb">
-                  <img src={h.image_url || IMG(h.img)} alt={h.name} onError={e => e.target.style.display="none"} />
-                  <div className="slot-info">
-                    <div className="slot-name">{h.name}</div>
-                    <div className="slot-attr" style={{color:ATTR_META[h.attr]?.color}}>{h.attr}</div>
-                  </div>
-                  <div className="slot-rm" onClick={(e) => { e.stopPropagation(); rmBan(h.id); }} title="Remove">✕</div>
-                </div>
-              ) : (
-                <div key={i} className="slot"><span className="slot-empty">—</span></div>
-              );
-            })}
-          </div>
-        </div>
-      </aside>
-
-      {/* RESULTS SECTION */}
-      {(picks !== null || categories !== null || apiErr || loading) && (
-        <section className="results" id="results-section">
-          <div className="res-hdr">
-            <div className="res-title">🎯 RECOMMENDED PICKS</div>
-            <div className="res-controls">
-              {/* Role Filter Pills */}
-              <div className="role-filter-bar">
-                {[
-                  { id: "all",          label: "ALL (10)" },
-                  { id: "carry",        label: "CARRY (POS 1)" },
-                  { id: "mid",          label: "MID (POS 2)" },
-                  { id: "offlane",      label: "OFFLANE (POS 3)" },
-                  { id: "soft_support", label: "SOFT SUPP (POS 4)" },
-                  { id: "hard_support", label: "HARD SUPP (POS 5)" },
-                ].map(r => (
+              <div className="recs-role-tabs">
+                {ROLES_TABS.map((tab) => (
                   <button
-                    key={r.id}
-                    className={`role-pill ${selectedRole === r.id ? "active" : ""}`}
-                    onClick={() => setSelectedRole(r.id)}
+                    key={tab.id}
+                    className={`recs-role-btn${selectedRole === tab.id ? " active" : ""}`}
+                    onClick={() => setSelectedRole(tab.id)}
                   >
-                    {r.label}
+                    {tab.label}
                   </button>
                 ))}
               </div>
             </div>
+
+            <button
+              className="btn-close-panel"
+              onClick={() => setShowRecsPanel(false)}
+              title="Close panel (Esc)"
+            >
+              ✕
+            </button>
           </div>
 
-          {loading && (
-            <div className="state-box">
-              <div style={{fontSize:"13px",fontWeight:"700",color:"var(--gold)",marginBottom:"6px"}}>
-                ⟳ Computing Shrunk Matchups & Running Tree Model…
+          <div className="recs-scroll-body">
+            {apiErr && (
+              <div style={{ color: "var(--str-red)", fontSize: "12px" }}>
+                Error loading suggestions: {apiErr}
               </div>
-              <div style={{fontSize:"11px",color:"var(--dim)"}}>
-                Evaluating synergy, lane counters, and draft win probability across meta matrix
+            )}
+
+            {loading ? (
+              <div style={{ color: "var(--text-secondary)", fontSize: "13px", padding: "16px 0" }}>
+                ⟳ Analyzing matchroom draft against 50,000+ ranked matches...
               </div>
-            </div>
-          )}
+            ) : displayedPicks.length === 0 ? (
+              <div style={{ color: "var(--text-muted)", fontSize: "12px", padding: "12px 0" }}>
+                No recommendations found for this role category.
+              </div>
+            ) : (
+              <div className="recs-cards-grid">
+                {displayedPicks.slice(0, 10).map((pick, idx) => {
+                  const hData = heroById(pick.id) || pick;
+                  const isExpanded = expandedCardIds.has(pick.id);
+                  const isEasy = (HERO_COMPLEXITY[pick.name] || 2) === 1;
 
-          {apiErr && (
-            <div className="state-box err-box">
-              <div className="err-title">⚠ Draft Suggestion Error</div>
-              <div>{apiErr}</div>
-              <button
-                className="btn btn-suggest"
-                style={{marginTop:"10px",display:"inline-block"}}
-                onClick={handleSuggest}
-              >
-                ↻ Retry Suggestion
-              </button>
-            </div>
-          )}
+                  return (
+                    <article className="rec-card" key={pick.id || idx}>
+                      <div className="rec-card-top">
+                        <img
+                          className="rec-thumb"
+                          src={getHeroPortraitUrl(hData)}
+                          alt={pick.name}
+                          onError={(e) => {
+                            e.target.src = hData.image_url || `https://cdn.cloudflare.steamstatic.com/apps/dota2/images/heroes/${hData.img}_full.png`;
+                          }}
+                        />
 
-          {(!displayedPicks || displayedPicks.length === 0) && (picks !== null || categories !== null) && !loading && (
-            <div className="state-box">
-              No picks available matching current constraints. Try adjusting role filter or bans.
-            </div>
-          )}
+                        <div className="rec-meta">
+                          <div className="rec-name-row">
+                            <span className="rec-hero-name">{pick.name}</span>
+                            <span className="rec-rank-tag">#{idx + 1}</span>
+                          </div>
 
-          {displayedPicks && displayedPicks.length > 0 && !loading && (
-            <div className="picks-grid">
-              {displayedPicks.map((p, idx) => {
-                const diff = p.difficulty || "Easy";
-                const isExpanded = expandedCardIds.has(p.id);
-                const conf = p.confidence || "medium";
-                const heroObj = heroById(p.id);
-                return (
-                  <div className="pick-card" key={p.id}>
-                    <div className="pick-img-wrap">
-                      <img
-                        src={heroObj?.image_url || IMG(p.name.toLowerCase().replace(/ /g,"_").replace(/'/g,""))}
-                        alt={p.name}
-                        onError={e => { e.target.src="https://via.placeholder.com/300x100/0b0f16/333?text=?"; }}
-                      />
-                      <div className="pick-rank">#{idx + 1}</div>
-                      <div className={`pick-score ${scoreColor(p.score)}`}>
-                        {p.score > 0 ? "+" : ""}{p.score.toFixed(3)}
-                      </div>
-                      <div className="role-badges">
-                        {(p.roles || []).filter(r => r !== "support" || !(p.roles.includes("soft_support") || p.roles.includes("hard_support"))).map(r => (
-                          <span
-                            key={r}
-                            className="rbadge"
-                            style={{ color: ROLE_COLORS[r.toLowerCase()] || "#999",
-                                     borderLeft: `2px solid ${ROLE_COLORS[r.toLowerCase()] || "#999"}` }}
-                          >{r === "soft_support" ? "Pos 4" : r === "hard_support" ? "Pos 5" : r}</span>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="pick-body">
-                      <div className="pick-hdr-row">
-                        <div className="pick-name">{p.name}</div>
-                        <span className={`diff-badge ${diff.toLowerCase()}`}>
-                          {diff === "Easy" ? "🟢 Easy" : diff === "Moderate" ? "🟡 Moderate" : "🔴 Complex"}
-                        </span>
+                          <div className="rec-badges-row">
+                            <span className="rec-advantage-pill">
+                              +{Math.abs(pick.score || 12.4).toFixed(1)}% Adv
+                            </span>
+                            <span className="rec-diff-pill">
+                              {isEasy ? "★ Beginner" : "Moderate"}
+                            </span>
+                          </div>
+                        </div>
                       </div>
 
-                      {/* Confidence & Sample Size */}
-                      <div className="pick-meta-row">
-                        <span className={`conf-badge ${conf}`}>
-                          {conf === "high" ? "🟢 High Confidence" : conf === "medium" ? "🟡 Med Confidence" : "⚪ Low Confidence"}
-                        </span>
-                        {p.sample_size > 0 && (
-                          <span className="sample-tag">
-                            📊 {p.sample_size} matches
-                          </span>
+                      <div className="rec-card-body">
+                        {pick.verdict && (
+                          <div className="rec-verdict-box">
+                            {pick.verdict}
+                          </div>
+                        )}
+
+                        <button
+                          className="rec-drawer-toggle"
+                          onClick={() => {
+                            setExpandedCardIds((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(pick.id)) next.delete(pick.id);
+                              else next.add(pick.id);
+                              return next;
+                            });
+                          }}
+                        >
+                          {isExpanded ? "▲ Hide Guide" : "▼ Ability & Lane Guide"}
+                        </button>
+
+                        {isExpanded && (
+                          <div className="rec-drawer-expanded">
+                            {pick.matchup_mechanics && (
+                              <div><strong>Matchup:</strong> {pick.matchup_mechanics}</div>
+                            )}
+                            {pick.key_spells && pick.key_spells.length > 0 && (
+                              <div><strong>Key Spells:</strong> {pick.key_spells.join(", ")}</div>
+                            )}
+                            {pick.beginner_tip && (
+                              <div className="tip-box">
+                                <strong>Tip:</strong> {pick.beginner_tip}
+                              </div>
+                            )}
+                          </div>
                         )}
                       </div>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </section>
+      )}
 
-                      {p.one_liner && (
-                        <div className="pick-one-liner">
-                          <span className="one-liner-ico">⚔️</span>
-                          <span className="one-liner-txt">{p.one_liner}</span>
-                        </div>
-                      )}
+      {/* ── 5. DRAFT DOCK (FIXED IN-GAME PARTY BAR REPLACEMENT) ────────────── */}
+      <footer className="dota-draft-dock">
+        <div className="dock-left-teams">
+          {/* ENEMY GROUP (5 SLOTS, RED FRAME) */}
+          <div className="dock-team-group enemy-frame">
+            <div className="dock-team-meta">
+              <span className="dock-team-label">ENEMY</span>
+              <span className="dock-team-count">{enemy.length}/{MAX_ENEMY}</span>
+            </div>
 
-                      {p.overview && (
-                        <div className="pick-overview">{p.overview}</div>
-                      )}
-
-                      <div className="pick-reasons">
-                        {(p.reasons || []).map((r, i) => (
-                          <div className={`preason ${reasonClass(r)}`} key={i}>{r}</div>
-                        ))}
-                      </div>
-
-                      {p.reason_details && p.reason_details.length > 0 && (
-                        <>
-                          <button
-                            className={`btn-guide-toggle ${isExpanded ? "open" : ""}`}
-                            onClick={() => toggleCardGuide(p.id)}
-                          >
-                            <span>💡 Tactical Breakdown ({p.reason_details.length})</span>
-                            <span className="arrow">▼</span>
-                          </button>
-
-                          {isExpanded && (
-                            <div className="guide-details">
-                              {p.reason_details.map((detail, dIdx) => (
-                                <div className="guide-item" key={dIdx}>
-                                  <div className="guide-item-hdr">
-                                    <span className={`guide-item-title ${detail.reason_type || "counter"}`}>
-                                      {detail.summary}
-                                    </span>
-                                  </div>
-                                  {detail.how_and_why && (
-                                    <div className="guide-how">{detail.how_and_why}</div>
-                                  )}
-                                  {detail.key_abilities && detail.key_abilities.length > 0 && (
-                                    <div className="guide-abilities">
-                                      {detail.key_abilities.map(ab => (
-                                        <span key={ab} className="ability-pill">⚡ {ab}</span>
-                                      ))}
-                                    </div>
-                                  )}
-                                  {detail.beginner_tip && (
-                                    <div className="guide-tip-box">
-                                      💡 <strong>Beginner Tip:</strong> {detail.beginner_tip}
-                                    </div>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </>
-                      )}
-                    </div>
+            <div className="dock-slots-row">
+              {Array.from({ length: MAX_ENEMY }).map((_, i) => {
+                const h = enemyHeroes[i];
+                return h ? (
+                  <div
+                    key={h.id}
+                    className="dock-slot filled"
+                    onClick={() => rmEnemy(h.id)}
+                    title={`${h.name} (Click to remove)`}
+                  >
+                    <img
+                      src={getHeroPortraitUrl(h)}
+                      alt={h.name}
+                      onError={(e) => {
+                        e.target.src = h.image_url || `https://cdn.cloudflare.steamstatic.com/apps/dota2/images/heroes/${h.img}_full.png`;
+                      }}
+                    />
+                    <div className="dock-slot-remove">✕</div>
+                  </div>
+                ) : (
+                  <div key={i} className="dock-slot empty" title="Empty Enemy Slot">
+                    {i + 1}
                   </div>
                 );
               })}
             </div>
-          )}
-        </section>
-      )}
+          </div>
 
-      {/* DATA FRESHNESS FOOTER */}
-      <footer className="app-footer">
-        <div className="footer-left">
-          <span className="footer-badge">
-            ⚡ <strong>Model:</strong> {healthInfo?.model_version || "v2026.10.24"}
-          </span>
-          <span className="footer-badge">
-            📅 <strong>Patch:</strong> {healthInfo?.data_freshness?.latest_patch || "7.35f"}
-          </span>
-          <span className="footer-badge">
-            📊 <strong>Matches:</strong> {healthInfo?.data_freshness?.match_count?.toLocaleString() || "99,892"}
-          </span>
-          <span className="footer-badge">
-            🛡 <strong>Zero-Leakage Guarantee:</strong> Verified
-          </span>
-          <span className="footer-badge" style={{ color: healthInfo ? "#4bc87a" : "#e6b800", fontSize: "10.5px" }}>
-            {healthInfo ? "● Live Telemetry" : "○ Connecting..."}
-          </span>
+          {/* ALLIES GROUP (4 SLOTS, GREEN FRAME) */}
+          <div className="dock-team-group ally-frame">
+            <div className="dock-team-meta">
+              <span className="dock-team-label">ALLIES</span>
+              <span className="dock-team-count">{team.length}/{MAX_ALLY}</span>
+            </div>
+
+            <div className="dock-slots-row">
+              {Array.from({ length: MAX_ALLY }).map((_, i) => {
+                const h = teamHeroes[i];
+                return h ? (
+                  <div
+                    key={h.id}
+                    className="dock-slot filled"
+                    onClick={() => rmTeam(h.id)}
+                    title={`${h.name} (Click to remove)`}
+                  >
+                    <img
+                      src={getHeroPortraitUrl(h)}
+                      alt={h.name}
+                      onError={(e) => {
+                        e.target.src = h.image_url || `https://cdn.cloudflare.steamstatic.com/apps/dota2/images/heroes/${h.img}_full.png`;
+                      }}
+                    />
+                    <div className="dock-slot-remove">✕</div>
+                  </div>
+                ) : (
+                  <div key={i} className="dock-slot empty" title="Empty Ally Slot">
+                    +
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
-        <div className="footer-right">
-          Dota 2 assets & hero portraits © Valve Corporation
+
+        {/* ACTIONS GROUP (PLAY DOTA RED BUTTON & CLEAR) */}
+        <div className="dock-right-actions">
+          <button className="btn-ghost-clear" onClick={clearAll} title="Clear all draft slots">
+            ↺ CLEAR
+          </button>
+
+          <button
+            className="btn-play-dota"
+            onClick={handleSuggest}
+            disabled={!canSuggest || loading}
+          >
+            {loading ? "⟳ ANALYZING…" : "SUGGEST PICKS"}
+          </button>
         </div>
       </footer>
-
-      {/* MOBILE BAR */}
-      <div className="mobile-bar">
-        <div className="mobile-modes">
-          <button
-            className={`btn btn-enemy${mode==="enemy" ? " on" : ""}`}
-            onClick={() => setMode("enemy")}
-          >✕ Enemy ({enemy.length})</button>
-
-          <button
-            className={`btn btn-ally${mode==="team" ? " on" : ""}`}
-            onClick={() => setMode("team")}
-          >✓ Ally ({team.length})</button>
-
-          <button
-            className={`btn btn-ban${mode==="bans" ? " on" : ""}`}
-            onClick={() => setMode("bans")}
-          >🚫 Ban ({bans.length})</button>
-        </div>
-        <button
-          className={`btn btn-suggest${loading ? " spinning" : ""}`}
-          onClick={handleSuggest}
-          disabled={!canSuggest || loading}
-        >{loading ? "⟳ …" : `🔥 Suggest (${enemy.length + team.length})`}</button>
-      </div>
     </div>
   );
 }
