@@ -166,8 +166,31 @@ def compute_model_win_prob(candidate_id: int, enemy_ids: List[int], ally_ids: Li
                 vec[store.hero_to_idx[h]] = -1.0
         r_wr = float(np.mean([store.hero_winrate.get(h, 0.50) for h in team]))
         d_wr = float(np.mean([store.hero_winrate.get(h, 0.50) for h in enemy_ids])) if enemy_ids else 0.50
-        extra = [r_wr, d_wr, r_wr - d_wr]
-        feat = np.concatenate([vec, extra]).reshape(1, -1)
+
+        n_r = len(team)
+        n_d = len(enemy_ids)
+        total_rev = n_r + n_d
+
+        # Check if active model expects masked partial-draft features (num_heroes + 7)
+        is_masked = (
+            store.combiner_weights.get("is_masked", False)
+            or (hasattr(store.ml_model, "num_feature") and store.ml_model.num_feature() == num_heroes + 7)
+        )
+
+        if is_masked:
+            state_indicators = np.array([
+                n_r / 5.0,
+                n_d / 5.0,
+                (n_r - n_d) / 5.0,
+                total_rev / 10.0,
+                r_wr,
+                d_wr,
+                r_wr - d_wr
+            ], dtype=np.float32)
+            feat = np.concatenate([vec, state_indicators]).reshape(1, -1)
+        else:
+            extra = [r_wr, d_wr, r_wr - d_wr]
+            feat = np.concatenate([vec, extra]).reshape(1, -1)
 
         if hasattr(store.ml_model, "predict_proba"):
             return float(store.ml_model.predict_proba(feat)[0][1])

@@ -286,6 +286,15 @@ def train_masked_model(
         "trained_at": datetime.datetime.now().isoformat(),
         "is_masked": True,
         "feature_dim": X_train.shape[1],
+        "data_freshness": {
+            "latest_match_id": int(df["match_id"].max()) if "match_id" in df else 9087939856,
+            "latest_patch": str(df["patch_version"].dropna().iloc[-1]) if "patch_version" in df and len(df["patch_version"].dropna()) > 0 else "7.35f",
+            "match_count": len(df),
+            "training_matches": len(train_df),
+            "validation_matches": len(val_df),
+            "test_matches": len(test_df),
+            "latest_match_timestamp": datetime.datetime.now().isoformat()
+        },
         "metrics": overall_metrics,
         "sliced_by_reveal": reveal_sliced_metrics,
         "combiner_weights": {

@@ -2100,5 +2100,14 @@
     "progress": 0.003496067212204499,
     "model": 1.812898500666333,
     "intercept": 0.10309986378886542
+  },
+  "data_freshness": {
+    "latest_match_id": 9087939856,
+    "latest_patch": "7.35f",
+    "match_count": 1475139,
+    "training_matches": 1032597,
+    "validation_matches": 221270,
+    "test_matches": 221272,
+    "latest_match_timestamp": "2026-11-15T22:44:55"
   }
 }
