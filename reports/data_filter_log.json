@@ -1,0 +1,32 @@
+{
+  "initial_raw_count": 1478381,
+  "filters_applied": {
+    "deduplicate_match_id": {
+      "removed": 0,
+      "remaining": 1478381,
+      "description": "Drop duplicate match IDs, keeping latest occurrence"
+    },
+    "valid_5v5_distinct_heroes": {
+      "removed": 3242,
+      "remaining": 1475139,
+      "description": "Requires exactly 5 distinct non-zero hero IDs per team (filters leavers/incomplete drafts)"
+    },
+    "cross_team_overlap": {
+      "removed": 0,
+      "remaining": 1475139,
+      "description": "Requires 0 overlapping heroes between Radiant and Dire"
+    },
+    "null_metadata_check": {
+      "removed": 0,
+      "remaining": 1475139,
+      "description": "Requires non-null patch version and non-null winner boolean"
+    }
+  },
+  "final_clean_count": 1475139,
+  "total_rows_removed": 3242,
+  "retention_rate_pct": 99.78,
+  "patch_distribution": {
+    "7.35f": 1092804,
+    "7.35d": 382335
+  }
+}

@@ -44,7 +44,7 @@ def export_raw_parquet(db_url: str, output_path: Path, batch_size: int = 100000)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     print(f"Connecting to database (READ-ONLY) to export raw snapshot...")
     conn = psycopg2.connect(db_url)
-    conn.set_session(readonly=True, autocommit=True)
+    conn.set_session(readonly=True)
 
     cursor_name = "raw_matches_export_cursor"
     writer = None
