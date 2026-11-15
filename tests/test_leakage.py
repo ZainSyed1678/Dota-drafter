@@ -82,3 +82,52 @@ def test_zero_leakage_split():
     assert len(train_ids & val_ids) == 0, "Train and Validation match ID overlap detected!"
     assert len(train_ids & test_ids) == 0, "Train and Test match ID overlap detected!"
     assert len(val_ids & test_ids) == 0, "Validation and Test match ID overlap detected!"
+
+
+def test_walk_forward_leakage_invariance(tmp_path):
+    """
+    Verifies that every fold in WalkForwardHarness guarantees zero temporal
+    and zero match-id leakage across train, val, and test partitions.
+    """
+    import sys
+    root_path = Path(__file__).resolve().parent.parent
+    if str(root_path) not in sys.path:
+        sys.path.insert(0, str(root_path))
+    from ml_pipeline.harness import WalkForwardHarness
+
+    # Create synthetic chronologically ordered dataset across patches
+    data = []
+    for i in range(1500):
+        data.append({
+            "match_id": 200000 + i,
+            "radiant_win": bool(i % 2 == 0),
+            "radiant_team": [1, 2, 3, 4, 5],
+            "dire_team": [6, 7, 8, 9, 10],
+            "patch_version": "7.35d" if i < 600 else "7.35f"
+        })
+    df = pd.DataFrame(data)
+    test_pq = tmp_path / "walk_forward_leakage_test.parquet"
+    df.to_parquet(test_pq, index=False)
+
+    harness = WalkForwardHarness(parquet_path=str(test_pq), n_folds=3, holdout_ratio=0.15)
+    folds = harness.get_folds()
+
+    assert len(folds) == 3
+    for fold in folds:
+        train_ids = set(fold.train_df['match_id'])
+        val_ids = set(fold.val_df['match_id'])
+        test_ids = set(fold.test_df['match_id'])
+
+        # 1. Temporal sequence checks
+        assert fold.train_df['match_id'].max() < fold.val_df['match_id'].min(), (
+            f"Fold {fold.fold_idx}: Train max match_id not less than Val min match_id"
+        )
+        assert fold.val_df['match_id'].max() < fold.test_df['match_id'].min(), (
+            f"Fold {fold.fold_idx}: Val max match_id not less than Test min match_id"
+        )
+
+        # 2. Strict set disjointness
+        assert len(train_ids & val_ids) == 0, f"Fold {fold.fold_idx}: Train & Val overlap!"
+        assert len(train_ids & test_ids) == 0, f"Fold {fold.fold_idx}: Train & Test overlap!"
+        assert len(val_ids & test_ids) == 0, f"Fold {fold.fold_idx}: Val & Test overlap!"
+
