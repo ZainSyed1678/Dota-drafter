@@ -25,6 +25,8 @@ env/
 
 # Large match data files (keep fixtures for CI)
 data/*.csv
+data/snapshots/
+*.parquet
 notebooks/*.csv
 matches*.csv
 *.csv
