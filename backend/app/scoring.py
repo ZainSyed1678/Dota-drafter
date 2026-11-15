@@ -93,6 +93,39 @@ def infer_missing_roles(ally_ids: List[int]) -> List[str]:
     return needed if needed else ["carry", "mid", "offlane", "support"]
 
 
+def compute_posterior_confidence(
+    games: int,
+    raw_rate: float = 0.50,
+    prior: float = 0.50,
+    k: float = 15.0,
+    max_width_high: float = 0.08,
+    max_width_medium: float = 0.15
+) -> Tuple[str, float]:
+    """
+    Computes confidence tier ('high', 'medium', 'low') and 95% posterior interval width
+    from Beta posterior variance instead of hardcoded small-sample constants.
+    """
+    if games <= 0:
+        return "low", 1.0
+
+    wins = raw_rate * games
+    alpha = wins + k * prior
+    beta = (games - wins) + k * (1.0 - prior)
+    total = alpha + beta
+
+    var = (alpha * beta) / ((total ** 2) * (total + 1.0))
+    interval_width = float(3.92 * np.sqrt(max(0.0, var)))
+
+    if interval_width <= max_width_high or games >= 200:
+        tier = "high"
+    elif interval_width <= max_width_medium or games >= 50:
+        tier = "medium"
+    else:
+        tier = "low"
+
+    return tier, interval_width
+
+
 def norm_matchup(hero_id: int, enemy_ids: List[int]) -> float:
     if not enemy_ids:
         return 0.0
@@ -212,12 +245,7 @@ def build_reasons_and_details(
             raw = (1.0 - rev) if rev is not None else bl
         adj = raw - bl
         sample_size = store.matchup_samples.get((hero_id, eid), store.matchup_samples.get((eid, hero_id), 0))
-        if sample_size >= 50:
-            confidence = "high"
-        elif sample_size >= 15:
-            confidence = "medium"
-        else:
-            confidence = "low"
+        confidence, _ = compute_posterior_confidence(games=sample_size, raw_rate=raw, prior=bl)
 
         is_known_counter = (hero_name, ename) in SPECIFIC_COUNTERS
         if adj >= 0.01 or is_known_counter:
