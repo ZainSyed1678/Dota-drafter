@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     TELEGRAM_TOKEN: Optional[str] = None
     ENABLE_EMBEDDED_BOT: bool = True
     ADMIN_API_KEY: Optional[str] = None
+    ENABLE_SHADOW_LOGGING: bool = False
 
     CORS_ORIGINS: List[str] = ["*"]
     CACHE_SIZE: int = 1024

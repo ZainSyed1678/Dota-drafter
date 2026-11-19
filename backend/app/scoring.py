@@ -334,6 +334,18 @@ def predict(
     if has_emb and store.embedding_model is not None and w_emb != 0.0:
         p_emb = compute_embedding_win_prob(hero_id, enemy_ids, ally_ids)
         score += w_emb * (p_emb - 0.50)
+
+    # Optional shadow candidate prediction logging
+    if getattr(settings, "ENABLE_SHADOW_LOGGING", False):
+        try:
+            shadow_prob = compute_embedding_win_prob(hero_id, enemy_ids, ally_ids)
+            log.info(
+                f"SHADOW_PREDICTION: hero={hero_id} primary_score={score:.4f} "
+                f"shadow_prob={shadow_prob:.4f} delta={shadow_prob - (score + 0.50):+.4f}"
+            )
+        except Exception as e:
+            log.debug(f"Shadow prediction logging failed: {e}")
+
     return score
 
 
