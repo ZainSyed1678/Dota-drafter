@@ -1,0 +1,1272 @@
+{
+  "1": {
+    "distribution": {
+      "carry": 0.8504,
+      "mid": 0.1154,
+      "offlane": 0.006,
+      "support": 0.0282
+    },
+    "primary_role": "carry",
+    "sample_size": 62765
+  },
+  "2": {
+    "distribution": {
+      "carry": 0.058,
+      "mid": 0.0036,
+      "offlane": 0.8932,
+      "support": 0.0452
+    },
+    "primary_role": "offlane",
+    "sample_size": 60764
+  },
+  "3": {
+    "distribution": {
+      "carry": 0.0016,
+      "mid": 0.0598,
+      "offlane": 0.1016,
+      "support": 0.837
+    },
+    "primary_role": "support",
+    "sample_size": 11351
+  },
+  "4": {
+    "distribution": {
+      "carry": 0.1878,
+      "mid": 0.0246,
+      "offlane": 0.0872,
+      "support": 0.7004
+    },
+    "primary_role": "support",
+    "sample_size": 12364
+  },
+  "5": {
+    "distribution": {
+      "carry": 0.0003,
+      "mid": 0.0766,
+      "offlane": 0.001,
+      "support": 0.9221
+    },
+    "primary_role": "support",
+    "sample_size": 49934
+  },
+  "6": {
+    "distribution": {
+      "carry": 0.9447,
+      "mid": 0.0078,
+      "offlane": 0.0077,
+      "support": 0.0399
+    },
+    "primary_role": "carry",
+    "sample_size": 66093
+  },
+  "7": {
+    "distribution": {
+      "carry": 0.0016,
+      "mid": 0.1137,
+      "offlane": 0.5136,
+      "support": 0.3712
+    },
+    "primary_role": "offlane",
+    "sample_size": 66490
+  },
+  "8": {
+    "distribution": {
+      "carry": 0.9541,
+      "mid": 0.0069,
+      "offlane": 0.007,
+      "support": 0.032
+    },
+    "primary_role": "carry",
+    "sample_size": 65764
+  },
+  "9": {
+    "distribution": {
+      "carry": 0.0353,
+      "mid": 0.0742,
+      "offlane": 0.3948,
+      "support": 0.4957
+    },
+    "primary_role": "support",
+    "sample_size": 44052
+  },
+  "10": {
+    "distribution": {
+      "carry": 0.7117,
+      "mid": 0.1085,
+      "offlane": 0.1322,
+      "support": 0.0476
+    },
+    "primary_role": "carry",
+    "sample_size": 16542
+  },
+  "11": {
+    "distribution": {
+      "carry": 0.1795,
+      "mid": 0.7283,
+      "offlane": 0.0186,
+      "support": 0.0736
+    },
+    "primary_role": "mid",
+    "sample_size": 36247
+  },
+  "12": {
+    "distribution": {
+      "carry": 0.8698,
+      "mid": 0.1001,
+      "offlane": 0.0057,
+      "support": 0.0244
+    },
+    "primary_role": "carry",
+    "sample_size": 44344
+  },
+  "13": {
+    "distribution": {
+      "carry": 0.0014,
+      "mid": 0.7536,
+      "offlane": 0.1837,
+      "support": 0.0612
+    },
+    "primary_role": "mid",
+    "sample_size": 13754
+  },
+  "14": {
+    "distribution": {
+      "carry": 0.0007,
+      "mid": 0.172,
+      "offlane": 0.7538,
+      "support": 0.0734
+    },
+    "primary_role": "offlane",
+    "sample_size": 115060
+  },
+  "15": {
+    "distribution": {
+      "carry": 0.392,
+      "mid": 0.2113,
+      "offlane": 0.3024,
+      "support": 0.0943
+    },
+    "primary_role": "carry",
+    "sample_size": 20750
+  },
+  "16": {
+    "distribution": {
+      "carry": 0.0022,
+      "mid": 0.1127,
+      "offlane": 0.5735,
+      "support": 0.3116
+    },
+    "primary_role": "offlane",
+    "sample_size": 15208
+  },
+  "17": {
+    "distribution": {
+      "carry": 0.0589,
+      "mid": 0.6708,
+      "offlane": 0.1718,
+      "support": 0.0985
+    },
+    "primary_role": "mid",
+    "sample_size": 21454
+  },
+  "18": {
+    "distribution": {
+      "carry": 0.7488,
+      "mid": 0.0883,
+      "offlane": 0.1242,
+      "support": 0.0388
+    },
+    "primary_role": "carry",
+    "sample_size": 38583
+  },
+  "19": {
+    "distribution": {
+      "carry": 0.4234,
+      "mid": 0.205,
+      "offlane": 0.2584,
+      "support": 0.1131
+    },
+    "primary_role": "carry",
+    "sample_size": 21239
+  },
+  "20": {
+    "distribution": {
+      "carry": 0.0032,
+      "mid": 0.0676,
+      "offlane": 0.125,
+      "support": 0.8041
+    },
+    "primary_role": "support",
+    "sample_size": 39679
+  },
+  "21": {
+    "distribution": {
+      "carry": 0.1042,
+      "mid": 0.0849,
+      "offlane": 0.0033,
+      "support": 0.8076
+    },
+    "primary_role": "support",
+    "sample_size": 69000
+  },
+  "22": {
+    "distribution": {
+      "carry": 0.097,
+      "mid": 0.7647,
+      "offlane": 0.0197,
+      "support": 0.1187
+    },
+    "primary_role": "mid",
+    "sample_size": 52176
+  },
+  "23": {
+    "distribution": {
+      "carry": 0.0414,
+      "mid": 0.075,
+      "offlane": 0.5947,
+      "support": 0.289
+    },
+    "primary_role": "offlane",
+    "sample_size": 19831
+  },
+  "25": {
+    "distribution": {
+      "carry": 0.0607,
+      "mid": 0.5337,
+      "offlane": 0.0031,
+      "support": 0.4025
+    },
+    "primary_role": "mid",
+    "sample_size": 53225
+  },
+  "26": {
+    "distribution": {
+      "carry": 0.0009,
+      "mid": 0.0612,
+      "offlane": 0.1031,
+      "support": 0.8348
+    },
+    "primary_role": "support",
+    "sample_size": 99573
+  },
+  "27": {
+    "distribution": {
+      "carry": 0.0005,
+      "mid": 0.0548,
+      "offlane": 0.0974,
+      "support": 0.8473
+    },
+    "primary_role": "support",
+    "sample_size": 57686
+  },
+  "28": {
+    "distribution": {
+      "carry": 0.0746,
+      "mid": 0.0047,
+      "offlane": 0.8724,
+      "support": 0.0482
+    },
+    "primary_role": "offlane",
+    "sample_size": 21813
+  },
+  "29": {
+    "distribution": {
+      "carry": 0.0506,
+      "mid": 0.092,
+      "offlane": 0.7863,
+      "support": 0.0711
+    },
+    "primary_role": "offlane",
+    "sample_size": 52024
+  },
+  "30": {
+    "distribution": {
+      "carry": 0.0003,
+      "mid": 0.0761,
+      "offlane": 0.001,
+      "support": 0.9225
+    },
+    "primary_role": "support",
+    "sample_size": 65232
+  },
+  "31": {
+    "distribution": {
+      "carry": 0.0002,
+      "mid": 0.0707,
+      "offlane": 0.0008,
+      "support": 0.9283
+    },
+    "primary_role": "support",
+    "sample_size": 44535
+  },
+  "32": {
+    "distribution": {
+      "carry": 0.192,
+      "mid": 0.0001,
+      "offlane": 0.002,
+      "support": 0.8059
+    },
+    "primary_role": "support",
+    "sample_size": 20111
+  },
+  "33": {
+    "distribution": {
+      "carry": 0.0005,
+      "mid": 0.0001,
+      "offlane": 0.1978,
+      "support": 0.8016
+    },
+    "primary_role": "support",
+    "sample_size": 20094
+  },
+  "34": {
+    "distribution": {
+      "carry": 0.0987,
+      "mid": 0.7987,
+      "offlane": 0.0191,
+      "support": 0.0835
+    },
+    "primary_role": "mid",
+    "sample_size": 22267
+  },
+  "35": {
+    "distribution": {
+      "carry": 0.1332,
+      "mid": 0.7663,
+      "offlane": 0.0167,
+      "support": 0.0838
+    },
+    "primary_role": "mid",
+    "sample_size": 76136
+  },
+  "36": {
+    "distribution": {
+      "carry": 0.063,
+      "mid": 0.0321,
+      "offlane": 0.1094,
+      "support": 0.7955
+    },
+    "primary_role": "support",
+    "sample_size": 54504
+  },
+  "37": {
+    "distribution": {
+      "carry": 0.0004,
+      "mid": 0.0001,
+      "offlane": 0.1212,
+      "support": 0.8782
+    },
+    "primary_role": "support",
+    "sample_size": 21567
+  },
+  "38": {
+    "distribution": {
+      "carry": 0.0015,
+      "mid": 0.1556,
+      "offlane": 0.7821,
+      "support": 0.0608
+    },
+    "primary_role": "offlane",
+    "sample_size": 8131
+  },
+  "39": {
+    "distribution": {
+      "carry": 0.0948,
+      "mid": 0.7991,
+      "offlane": 0.0171,
+      "support": 0.089
+    },
+    "primary_role": "mid",
+    "sample_size": 33923
+  },
+  "40": {
+    "distribution": {
+      "carry": 0.0013,
+      "mid": 0.2144,
+      "offlane": 0.2016,
+      "support": 0.5827
+    },
+    "primary_role": "support",
+    "sample_size": 25505
+  },
+  "41": {
+    "distribution": {
+      "carry": 0.7848,
+      "mid": 0.0028,
+      "offlane": 0.1838,
+      "support": 0.0285
+    },
+    "primary_role": "carry",
+    "sample_size": 30432
+  },
+  "42": {
+    "distribution": {
+      "carry": 0.3826,
+      "mid": 0.0002,
+      "offlane": 0.2826,
+      "support": 0.3346
+    },
+    "primary_role": "carry",
+    "sample_size": 43379
+  },
+  "43": {
+    "distribution": {
+      "carry": 0.1102,
+      "mid": 0.7649,
+      "offlane": 0.0322,
+      "support": 0.0927
+    },
+    "primary_role": "mid",
+    "sample_size": 18198
+  },
+  "44": {
+    "distribution": {
+      "carry": 0.9401,
+      "mid": 0.0088,
+      "offlane": 0.009,
+      "support": 0.0421
+    },
+    "primary_role": "carry",
+    "sample_size": 50502
+  },
+  "45": {
+    "distribution": {
+      "carry": 0.0017,
+      "mid": 0.8119,
+      "offlane": 0.0279,
+      "support": 0.1585
+    },
+    "primary_role": "mid",
+    "sample_size": 17867
+  },
+  "46": {
+    "distribution": {
+      "carry": 0.2892,
+      "mid": 0.641,
+      "offlane": 0.0135,
+      "support": 0.0564
+    },
+    "primary_role": "mid",
+    "sample_size": 18976
+  },
+  "47": {
+    "distribution": {
+      "carry": 0.0699,
+      "mid": 0.5786,
+      "offlane": 0.2586,
+      "support": 0.0929
+    },
+    "primary_role": "mid",
+    "sample_size": 26363
+  },
+  "48": {
+    "distribution": {
+      "carry": 0.8494,
+      "mid": 0.1156,
+      "offlane": 0.0057,
+      "support": 0.0294
+    },
+    "primary_role": "carry",
+    "sample_size": 47684
+  },
+  "49": {
+    "distribution": {
+      "carry": 0.0623,
+      "mid": 0.5097,
+      "offlane": 0.3503,
+      "support": 0.0777
+    },
+    "primary_role": "mid",
+    "sample_size": 54583
+  },
+  "50": {
+    "distribution": {
+      "carry": 0.0018,
+      "mid": 0.2509,
+      "offlane": 0.0049,
+      "support": 0.7424
+    },
+    "primary_role": "support",
+    "sample_size": 23061
+  },
+  "51": {
+    "distribution": {
+      "carry": 0.0018,
+      "mid": 0.1733,
+      "offlane": 0.724,
+      "support": 0.1009
+    },
+    "primary_role": "offlane",
+    "sample_size": 11710
+  },
+  "52": {
+    "distribution": {
+      "carry": 0.0981,
+      "mid": 0.5029,
+      "offlane": 0.0082,
+      "support": 0.3907
+    },
+    "primary_role": "mid",
+    "sample_size": 10797
+  },
+  "53": {
+    "distribution": {
+      "carry": 0.1766,
+      "mid": 0.704,
+      "offlane": 0.0195,
+      "support": 0.0999
+    },
+    "primary_role": "mid",
+    "sample_size": 32665
+  },
+  "54": {
+    "distribution": {
+      "carry": 0.8226,
+      "mid": 0.0022,
+      "offlane": 0.1537,
+      "support": 0.0215
+    },
+    "primary_role": "carry",
+    "sample_size": 52165
+  },
+  "55": {
+    "distribution": {
+      "carry": 0.0028,
+      "mid": 0.006,
+      "offlane": 0.9109,
+      "support": 0.0803
+    },
+    "primary_role": "offlane",
+    "sample_size": 18702
+  },
+  "56": {
+    "distribution": {
+      "carry": 0.868,
+      "mid": 0.0277,
+      "offlane": 0.0207,
+      "support": 0.0836
+    },
+    "primary_role": "carry",
+    "sample_size": 16632
+  },
+  "57": {
+    "distribution": {
+      "carry": 0.0021,
+      "mid": 0.2401,
+      "offlane": 0.2995,
+      "support": 0.4583
+    },
+    "primary_role": "support",
+    "sample_size": 10220
+  },
+  "58": {
+    "distribution": {
+      "carry": 0.0003,
+      "mid": 0.0001,
+      "offlane": 0.1492,
+      "support": 0.8504
+    },
+    "primary_role": "support",
+    "sample_size": 9026
+  },
+  "59": {
+    "distribution": {
+      "carry": 0.1113,
+      "mid": 0.0104,
+      "offlane": 0.8029,
+      "support": 0.0754
+    },
+    "primary_role": "offlane",
+    "sample_size": 15807
+  },
+  "60": {
+    "distribution": {
+      "carry": 0.0986,
+      "mid": 0.2533,
+      "offlane": 0.5391,
+      "support": 0.1089
+    },
+    "primary_role": "offlane",
+    "sample_size": 28858
+  },
+  "61": {
+    "distribution": {
+      "carry": 0.3031,
+      "mid": 0.4845,
+      "offlane": 0.0416,
+      "support": 0.1708
+    },
+    "primary_role": "mid",
+    "sample_size": 7040
+  },
+  "62": {
+    "distribution": {
+      "carry": 0.0004,
+      "mid": 0.0792,
+      "offlane": 0.0019,
+      "support": 0.9186
+    },
+    "primary_role": "support",
+    "sample_size": 24684
+  },
+  "63": {
+    "distribution": {
+      "carry": 0.5579,
+      "mid": 0.0561,
+      "offlane": 0.0749,
+      "support": 0.3111
+    },
+    "primary_role": "carry",
+    "sample_size": 21421
+  },
+  "64": {
+    "distribution": {
+      "carry": 0.0003,
+      "mid": 0.08,
+      "offlane": 0.0012,
+      "support": 0.9185
+    },
+    "primary_role": "support",
+    "sample_size": 32453
+  },
+  "65": {
+    "distribution": {
+      "carry": 0.0012,
+      "mid": 0.0002,
+      "offlane": 0.168,
+      "support": 0.8307
+    },
+    "primary_role": "support",
+    "sample_size": 5170
+  },
+  "66": {
+    "distribution": {
+      "carry": 0.0,
+      "mid": 0.0,
+      "offlane": 0.0012,
+      "support": 0.9988
+    },
+    "primary_role": "support",
+    "sample_size": 2478
+  },
+  "67": {
+    "distribution": {
+      "carry": 0.8178,
+      "mid": 0.0027,
+      "offlane": 0.1558,
+      "support": 0.0236
+    },
+    "primary_role": "carry",
+    "sample_size": 34132
+  },
+  "68": {
+    "distribution": {
+      "carry": 0.0003,
+      "mid": 0.0836,
+      "offlane": 0.0014,
+      "support": 0.9147
+    },
+    "primary_role": "support",
+    "sample_size": 32084
+  },
+  "69": {
+    "distribution": {
+      "carry": 0.0506,
+      "mid": 0.0986,
+      "offlane": 0.7771,
+      "support": 0.0737
+    },
+    "primary_role": "offlane",
+    "sample_size": 21364
+  },
+  "70": {
+    "distribution": {
+      "carry": 0.7859,
+      "mid": 0.0035,
+      "offlane": 0.1832,
+      "support": 0.0275
+    },
+    "primary_role": "carry",
+    "sample_size": 31296
+  },
+  "71": {
+    "distribution": {
+      "carry": 0.0412,
+      "mid": 0.0001,
+      "offlane": 0.1436,
+      "support": 0.8151
+    },
+    "primary_role": "support",
+    "sample_size": 68155
+  },
+  "72": {
+    "distribution": {
+      "carry": 0.6151,
+      "mid": 0.2527,
+      "offlane": 0.0188,
+      "support": 0.1134
+    },
+    "primary_role": "carry",
+    "sample_size": 18357
+  },
+  "73": {
+    "distribution": {
+      "carry": 0.3701,
+      "mid": 0.1121,
+      "offlane": 0.1334,
+      "support": 0.3844
+    },
+    "primary_role": "support",
+    "sample_size": 12079
+  },
+  "74": {
+    "distribution": {
+      "carry": 0.0937,
+      "mid": 0.801,
+      "offlane": 0.0165,
+      "support": 0.0888
+    },
+    "primary_role": "mid",
+    "sample_size": 91284
+  },
+  "75": {
+    "distribution": {
+      "carry": 0.0169,
+      "mid": 0.3773,
+      "offlane": 0.1231,
+      "support": 0.4827
+    },
+    "primary_role": "support",
+    "sample_size": 35889
+  },
+  "76": {
+    "distribution": {
+      "carry": 0.0954,
+      "mid": 0.8143,
+      "offlane": 0.0156,
+      "support": 0.0746
+    },
+    "primary_role": "mid",
+    "sample_size": 45138
+  },
+  "77": {
+    "distribution": {
+      "carry": 0.4616,
+      "mid": 0.008,
+      "offlane": 0.4676,
+      "support": 0.0628
+    },
+    "primary_role": "offlane",
+    "sample_size": 5711
+  },
+  "78": {
+    "distribution": {
+      "carry": 0.0532,
+      "mid": 0.1006,
+      "offlane": 0.7699,
+      "support": 0.0763
+    },
+    "primary_role": "offlane",
+    "sample_size": 10025
+  },
+  "79": {
+    "distribution": {
+      "carry": 0.0015,
+      "mid": 0.0554,
+      "offlane": 0.0958,
+      "support": 0.8474
+    },
+    "primary_role": "support",
+    "sample_size": 9197
+  },
+  "80": {
+    "distribution": {
+      "carry": 0.7105,
+      "mid": 0.0087,
+      "offlane": 0.2335,
+      "support": 0.0473
+    },
+    "primary_role": "carry",
+    "sample_size": 10924
+  },
+  "81": {
+    "distribution": {
+      "carry": 0.5265,
+      "mid": 0.0047,
+      "offlane": 0.4183,
+      "support": 0.0505
+    },
+    "primary_role": "carry",
+    "sample_size": 13901
+  },
+  "82": {
+    "distribution": {
+      "carry": 0.4035,
+      "mid": 0.2783,
+      "offlane": 0.2056,
+      "support": 0.1125
+    },
+    "primary_role": "carry",
+    "sample_size": 7404
+  },
+  "83": {
+    "distribution": {
+      "carry": 0.0006,
+      "mid": 0.0001,
+      "offlane": 0.1513,
+      "support": 0.848
+    },
+    "primary_role": "support",
+    "sample_size": 8476
+  },
+  "84": {
+    "distribution": {
+      "carry": 0.0012,
+      "mid": 0.0641,
+      "offlane": 0.1406,
+      "support": 0.794
+    },
+    "primary_role": "support",
+    "sample_size": 68950
+  },
+  "85": {
+    "distribution": {
+      "carry": 0.001,
+      "mid": 0.0593,
+      "offlane": 0.1584,
+      "support": 0.7812
+    },
+    "primary_role": "support",
+    "sample_size": 44294
+  },
+  "86": {
+    "distribution": {
+      "carry": 0.0004,
+      "mid": 0.0845,
+      "offlane": 0.0013,
+      "support": 0.9138
+    },
+    "primary_role": "support",
+    "sample_size": 99373
+  },
+  "87": {
+    "distribution": {
+      "carry": 0.0004,
+      "mid": 0.0561,
+      "offlane": 0.0934,
+      "support": 0.8501
+    },
+    "primary_role": "support",
+    "sample_size": 33941
+  },
+  "88": {
+    "distribution": {
+      "carry": 0.0011,
+      "mid": 0.0692,
+      "offlane": 0.127,
+      "support": 0.8028
+    },
+    "primary_role": "support",
+    "sample_size": 44119
+  },
+  "89": {
+    "distribution": {
+      "carry": 0.4925,
+      "mid": 0.0,
+      "offlane": 0.1393,
+      "support": 0.3682
+    },
+    "primary_role": "carry",
+    "sample_size": 5063
+  },
+  "90": {
+    "distribution": {
+      "carry": 0.0006,
+      "mid": 0.1143,
+      "offlane": 0.0015,
+      "support": 0.8836
+    },
+    "primary_role": "support",
+    "sample_size": 16895
+  },
+  "91": {
+    "distribution": {
+      "carry": 0.0008,
+      "mid": 0.0884,
+      "offlane": 0.0017,
+      "support": 0.909
+    },
+    "primary_role": "support",
+    "sample_size": 22758
+  },
+  "92": {
+    "distribution": {
+      "carry": 0.0018,
+      "mid": 0.0811,
+      "offlane": 0.1966,
+      "support": 0.7205
+    },
+    "primary_role": "support",
+    "sample_size": 6733
+  },
+  "93": {
+    "distribution": {
+      "carry": 0.7948,
+      "mid": 0.1574,
+      "offlane": 0.0103,
+      "support": 0.0375
+    },
+    "primary_role": "carry",
+    "sample_size": 58324
+  },
+  "94": {
+    "distribution": {
+      "carry": 0.7639,
+      "mid": 0.0051,
+      "offlane": 0.1958,
+      "support": 0.0352
+    },
+    "primary_role": "carry",
+    "sample_size": 10630
+  },
+  "95": {
+    "distribution": {
+      "carry": 0.7605,
+      "mid": 0.0065,
+      "offlane": 0.1984,
+      "support": 0.0345
+    },
+    "primary_role": "carry",
+    "sample_size": 10534
+  },
+  "96": {
+    "distribution": {
+      "carry": 0.0006,
+      "mid": 0.1227,
+      "offlane": 0.8294,
+      "support": 0.0473
+    },
+    "primary_role": "offlane",
+    "sample_size": 19562
+  },
+  "97": {
+    "distribution": {
+      "carry": 0.0012,
+      "mid": 0.1635,
+      "offlane": 0.771,
+      "support": 0.0643
+    },
+    "primary_role": "offlane",
+    "sample_size": 53939
+  },
+  "98": {
+    "distribution": {
+      "carry": 0.0014,
+      "mid": 0.1421,
+      "offlane": 0.8086,
+      "support": 0.0479
+    },
+    "primary_role": "offlane",
+    "sample_size": 20943
+  },
+  "99": {
+    "distribution": {
+      "carry": 0.0581,
+      "mid": 0.0962,
+      "offlane": 0.7707,
+      "support": 0.075
+    },
+    "primary_role": "offlane",
+    "sample_size": 19914
+  },
+  "100": {
+    "distribution": {
+      "carry": 0.0011,
+      "mid": 0.0641,
+      "offlane": 0.1288,
+      "support": 0.806
+    },
+    "primary_role": "support",
+    "sample_size": 25560
+  },
+  "101": {
+    "distribution": {
+      "carry": 0.0004,
+      "mid": 0.091,
+      "offlane": 0.0012,
+      "support": 0.9074
+    },
+    "primary_role": "support",
+    "sample_size": 43550
+  },
+  "102": {
+    "distribution": {
+      "carry": 0.0602,
+      "mid": 0.0,
+      "offlane": 0.1475,
+      "support": 0.7923
+    },
+    "primary_role": "support",
+    "sample_size": 12729
+  },
+  "103": {
+    "distribution": {
+      "carry": 0.0022,
+      "mid": 0.165,
+      "offlane": 0.7496,
+      "support": 0.0832
+    },
+    "primary_role": "offlane",
+    "sample_size": 4607
+  },
+  "104": {
+    "distribution": {
+      "carry": 0.045,
+      "mid": 0.026,
+      "offlane": 0.1883,
+      "support": 0.7407
+    },
+    "primary_role": "support",
+    "sample_size": 57318
+  },
+  "105": {
+    "distribution": {
+      "carry": 0.0006,
+      "mid": 0.8083,
+      "offlane": 0.026,
+      "support": 0.165
+    },
+    "primary_role": "mid",
+    "sample_size": 60055
+  },
+  "106": {
+    "distribution": {
+      "carry": 0.3507,
+      "mid": 0.3328,
+      "offlane": 0.2021,
+      "support": 0.1144
+    },
+    "primary_role": "carry",
+    "sample_size": 28266
+  },
+  "107": {
+    "distribution": {
+      "carry": 0.0011,
+      "mid": 0.2228,
+      "offlane": 0.6915,
+      "support": 0.0847
+    },
+    "primary_role": "offlane",
+    "sample_size": 19965
+  },
+  "108": {
+    "distribution": {
+      "carry": 0.0006,
+      "mid": 0.3645,
+      "offlane": 0.3312,
+      "support": 0.3036
+    },
+    "primary_role": "mid",
+    "sample_size": 18613
+  },
+  "109": {
+    "distribution": {
+      "carry": 0.8336,
+      "mid": 0.1192,
+      "offlane": 0.0091,
+      "support": 0.0381
+    },
+    "primary_role": "carry",
+    "sample_size": 18423
+  },
+  "110": {
+    "distribution": {
+      "carry": 0.0013,
+      "mid": 0.1232,
+      "offlane": 0.448,
+      "support": 0.4275
+    },
+    "primary_role": "offlane",
+    "sample_size": 23605
+  },
+  "111": {
+    "distribution": {
+      "carry": 0.0006,
+      "mid": 0.0765,
+      "offlane": 0.0012,
+      "support": 0.9217
+    },
+    "primary_role": "support",
+    "sample_size": 20927
+  },
+  "112": {
+    "distribution": {
+      "carry": 0.0003,
+      "mid": 0.074,
+      "offlane": 0.0012,
+      "support": 0.9244
+    },
+    "primary_role": "support",
+    "sample_size": 26465
+  },
+  "113": {
+    "distribution": {
+      "carry": 0.0908,
+      "mid": 0.1234,
+      "offlane": 0.0035,
+      "support": 0.7824
+    },
+    "primary_role": "support",
+    "sample_size": 18168
+  },
+  "114": {
+    "distribution": {
+      "carry": 0.6832,
+      "mid": 0.0092,
+      "offlane": 0.2514,
+      "support": 0.0562
+    },
+    "primary_role": "carry",
+    "sample_size": 21100
+  },
+  "119": {
+    "distribution": {
+      "carry": 0.0004,
+      "mid": 0.078,
+      "offlane": 0.0017,
+      "support": 0.9199
+    },
+    "primary_role": "support",
+    "sample_size": 29136
+  },
+  "120": {
+    "distribution": {
+      "carry": 0.055,
+      "mid": 0.599,
+      "offlane": 0.2518,
+      "support": 0.0942
+    },
+    "primary_role": "mid",
+    "sample_size": 16042
+  },
+  "121": {
+    "distribution": {
+      "carry": 0.0001,
+      "mid": 0.3857,
+      "offlane": 0.002,
+      "support": 0.6122
+    },
+    "primary_role": "support",
+    "sample_size": 32724
+  },
+  "123": {
+    "distribution": {
+      "carry": 0.0004,
+      "mid": 0.0773,
+      "offlane": 0.001,
+      "support": 0.9212
+    },
+    "primary_role": "support",
+    "sample_size": 42923
+  },
+  "126": {
+    "distribution": {
+      "carry": 0.1063,
+      "mid": 0.7924,
+      "offlane": 0.0216,
+      "support": 0.0797
+    },
+    "primary_role": "mid",
+    "sample_size": 18365
+  },
+  "128": {
+    "distribution": {
+      "carry": 0.0006,
+      "mid": 0.0941,
+      "offlane": 0.0017,
+      "support": 0.9036
+    },
+    "primary_role": "support",
+    "sample_size": 43229
+  },
+  "129": {
+    "distribution": {
+      "carry": 0.0678,
+      "mid": 0.0049,
+      "offlane": 0.8795,
+      "support": 0.0478
+    },
+    "primary_role": "offlane",
+    "sample_size": 19724
+  },
+  "131": {
+    "distribution": {
+      "carry": 0.0002,
+      "mid": 0.0748,
+      "offlane": 0.0012,
+      "support": 0.9238
+    },
+    "primary_role": "support",
+    "sample_size": 22549
+  },
+  "135": {
+    "distribution": {
+      "carry": 0.0618,
+      "mid": 0.0039,
+      "offlane": 0.8879,
+      "support": 0.0463
+    },
+    "primary_role": "offlane",
+    "sample_size": 38302
+  },
+  "136": {
+    "distribution": {
+      "carry": 0.0753,
+      "mid": 0.0001,
+      "offlane": 0.1437,
+      "support": 0.781
+    },
+    "primary_role": "support",
+    "sample_size": 20934
+  },
+  "137": {
+    "distribution": {
+      "carry": 0.0025,
+      "mid": 0.0066,
+      "offlane": 0.9207,
+      "support": 0.0701
+    },
+    "primary_role": "offlane",
+    "sample_size": 16593
+  },
+  "138": {
+    "distribution": {
+      "carry": 0.2396,
+      "mid": 0.0712,
+      "offlane": 0.0033,
+      "support": 0.6858
+    },
+    "primary_role": "support",
+    "sample_size": 11424
+  },
+  "145": {
+    "distribution": {
+      "carry": 0.6763,
+      "mid": 0.0533,
+      "offlane": 0.055,
+      "support": 0.2153
+    },
+    "primary_role": "carry",
+    "sample_size": 18390
+  },
+  "155": {
+    "distribution": {
+      "carry": 0.0048,
+      "mid": 0.0001,
+      "offlane": 0.4005,
+      "support": 0.5946
+    },
+    "primary_role": "support",
+    "sample_size": 8283
+  }
+}
