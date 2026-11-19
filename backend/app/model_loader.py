@@ -36,6 +36,8 @@ class ModelStore:
         }
         self.ml_model: Any = None
         self.embedding_model: Any = None
+        self.hero_role_distributions: Dict[int, Dict[str, float]] = {}
+        self.role_matchup_matrix: Dict[Tuple[int, int, str, str], float] = {}
         self.id_to_name: Dict[int, str] = {}
         self.name_to_id: Dict[str, int] = {}
         self.sorted_hero_ids: List[int] = []
@@ -100,6 +102,8 @@ class ModelStore:
             new_weights = _safe_load("combiner_weights.pkl", required=False) or {}
             new_avg = _safe_load("hero_avg_matchup.pkl", required=False) or {}
             new_winrate = _safe_load("hero_winrate.pkl", required=False) or {}
+            new_role_dists = _safe_load("role_distributions.pkl", required=False) or {}
+            new_role_matchup = _safe_load("role_matchup.pkl", required=False) or {}
 
             # Optional hero embedding model (CPU PyTorch / TorchScript)
             new_embedding_model = None
@@ -159,6 +163,8 @@ class ModelStore:
             self.hero_roles = new_roles
             self.ml_model = new_ml_model
             self.embedding_model = new_embedding_model
+            self.hero_role_distributions = new_role_dists
+            self.role_matchup_matrix = new_role_matchup
             self.hero_avg_matchup = new_avg
             self.hero_winrate = new_winrate
             if new_weights:

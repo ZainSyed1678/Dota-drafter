@@ -63,7 +63,8 @@ def suggest(request: Request, req: DraftRequest, response: Response):
         if hero_id in selected:
             continue
 
-        score = scoring.predict(hero_id, enemy_ids, ally_ids, engine=engine)
+        primary_target_role = target_roles[0] if (is_role_aware and target_roles) else None
+        score = scoring.predict(hero_id, enemy_ids, ally_ids, engine=engine, target_role=primary_target_role)
         h_roles = set(scoring.get_roles(hero_id))
         matches_role = bool(h_roles & set(target_roles)) if is_role_aware else True
         scored.append((hero_id, score, matches_role))

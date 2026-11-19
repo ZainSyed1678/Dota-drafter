@@ -1,4 +1,4 @@
-from typing import Any, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -22,9 +22,42 @@ from app.model_loader import store
 log = get_logger("dota-api.scoring")
 
 
-def get_roles(hero_id: int) -> List[str]:
-    hero_name = store.id_to_name.get(hero_id, "")
+def get_role_probability(hero_id: int, role: str) -> float:
+    """Return data-driven P(role | hero), falling back to static taxonomy."""
+    r_clean = role.lower()
+    if r_clean in ("soft_support", "hard_support"):
+        r_clean = "support"
+
+    if hasattr(store, "hero_role_distributions") and store.hero_role_distributions:
+        dist = store.hero_role_distributions.get(hero_id)
+        if dist:
+            return float(dist.get(r_clean, 0.0))
+
+    # Static taxonomy fallback
+    raw = store.hero_roles.get(hero_id, ["offlane"])
+    static_roles = [x.lower() for x in (raw if isinstance(raw, list) else [raw])]
+    if r_clean in static_roles:
+        return 1.0 / max(1, len(static_roles))
+    return 0.05
+
+
+def get_roles(hero_id: int, threshold: float = 0.15) -> List[str]:
+    """Return active roles for hero where P(role | hero) >= threshold, with taxonomy fallback."""
     roles = []
+    # 1. Data-driven role distributions if loaded
+    if hasattr(store, "hero_role_distributions") and store.hero_role_distributions:
+        dist = store.hero_role_distributions.get(hero_id)
+        if dist:
+            for r, p in dist.items():
+                if p >= threshold:
+                    roles.append(r)
+                    if r == "support":
+                        roles.extend(["soft_support", "hard_support"])
+            if roles:
+                return sorted(list(set(roles)))
+
+    # 2. Canonical sets fallback
+    hero_name = store.id_to_name.get(hero_id, "")
     if hero_name in CARRY_HEROES:
         roles.append("carry")
     if hero_name in MID_HEROES:
@@ -40,13 +73,13 @@ def get_roles(hero_id: int) -> List[str]:
         if "support" not in roles:
             roles.append("support")
 
-    # Safe fallback if hero not in any canonical set
+    # 3. Static taxonomy dictionary fallback
     if not roles:
         raw = store.hero_roles.get(hero_id, ["offlane"])
         roles = [x.lower() for x in (raw if isinstance(raw, list) else [raw])]
         if "support" in roles:
             roles.extend(["soft_support", "hard_support"])
-    return roles
+    return sorted(list(set(roles)))
 
 
 def resolve_hero_id(identifier: Any) -> Any:
@@ -126,16 +159,24 @@ def compute_posterior_confidence(
     return tier, interval_width
 
 
-def norm_matchup(hero_id: int, enemy_ids: List[int]) -> float:
+def norm_matchup(hero_id: int, enemy_ids: List[int], hero_role: Optional[str] = None) -> float:
     if not enemy_ids:
         return 0.0
     bl = store.hero_avg_matchup.get(hero_id, 0.50)
     total = 0.0
     for e in enemy_ids:
-        raw = store.matchup_matrix.get((hero_id, e))
+        raw = None
+        # Role-conditioned matchup with global fallback
+        if hero_role and hasattr(store, "role_matchup_matrix") and store.role_matchup_matrix:
+            e_roles = get_roles(e)
+            e_primary = e_roles[0] if e_roles else "offlane"
+            raw = store.role_matchup_matrix.get((hero_id, e, hero_role, e_primary))
+
         if raw is None:
-            rev = store.matchup_matrix.get((e, hero_id))
-            raw = (1.0 - rev) if rev is not None else bl
+            raw = store.matchup_matrix.get((hero_id, e))
+            if raw is None:
+                rev = store.matchup_matrix.get((e, hero_id))
+                raw = (1.0 - rev) if rev is not None else bl
         total += (raw - bl)
     return total / len(enemy_ids)
 
@@ -257,11 +298,17 @@ def compute_embedding_win_prob(candidate_id: int, enemy_ids: List[int], ally_ids
         return 0.50
 
 
-def predict(hero_id: int, enemy_ids: List[int], ally_ids: List[int], engine: str = None) -> float:
+def predict(
+    hero_id: int,
+    enemy_ids: List[int],
+    ally_ids: List[int],
+    engine: str = None,
+    target_role: Optional[str] = None
+) -> float:
     if engine is None:
         engine = settings.PREDICTION_ENGINE
 
-    m = norm_matchup(hero_id, enemy_ids)
+    m = norm_matchup(hero_id, enemy_ids, hero_role=target_role)
     s = synergy_score(hero_id, ally_ids)
     wr = store.hero_winrate.get(hero_id, 0.50)
     w_diff = wr - 0.50
