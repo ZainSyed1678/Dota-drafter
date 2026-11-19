@@ -1,4 +1,4 @@
-from typing import List, Optional, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -124,6 +124,11 @@ class HeroSuggestion(BaseModel):
     roles:          list[str] = []
     difficulty:     str = "Easy"
     overview:       str = ""
+    credible_interval: Optional[Tuple[float, float]] = None
+    credible_interval_width: Optional[float] = None
+    effective_sample_size: Optional[int] = None
+    top_positive_pairings: list[dict] = Field(default_factory=list)
+    top_negative_pairings: list[dict] = Field(default_factory=list)
 
 
 class SuggestResponse(BaseModel):
