@@ -27,6 +27,7 @@ except ImportError:
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Gauge, Histogram, generate_latest
 
 from app.config import settings
+from app.drift_monitor import drift_monitor
 from app.logger import get_logger
 from app.model_loader import store
 from app.routes.draft import router as draft_router
@@ -76,6 +77,10 @@ REQUEST_LATENCY = Histogram(
 HERO_COUNT = Gauge("dota_loaded_heroes_total", "Number of loaded heroes in model")
 ACTIVE_ENGINE = Gauge("dota_active_prediction_engine", "Prediction engine: 1 for ML/combined, 0 for heuristic")
 MODEL_LOAD_TIME = Gauge("dota_model_load_timestamp_seconds", "Timestamp when models were last loaded")
+ROLLING_LOG_LOSS = Gauge("dota_rolling_log_loss", "Rolling log loss of predictions vs outcomes")
+ROLLING_BRIER = Gauge("dota_rolling_brier_score", "Rolling Brier score of predictions vs outcomes")
+ROLLING_ECE = Gauge("dota_rolling_ece", "Rolling Expected Calibration Error")
+DRIFT_ALERT = Gauge("dota_drift_alert", "Binary indicator of calibration drift alert")
 
 
 @app.middleware("http")
@@ -155,6 +160,14 @@ def metrics():
             MODEL_LOAD_TIME.set(dt.timestamp())
         except Exception:
             pass
+
+    dm = drift_monitor.compute_metrics()
+    if dm["rolling_log_loss"] is not None:
+        ROLLING_LOG_LOSS.set(dm["rolling_log_loss"])
+        ROLLING_BRIER.set(dm["rolling_brier"])
+        ROLLING_ECE.set(dm["rolling_ece"])
+        DRIFT_ALERT.set(1 if dm["drift_alert"] else 0)
+
     return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 

@@ -1,9 +1,10 @@
 from typing import Optional
 
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Header, HTTPException, Response
 
 from app.cache import draft_cache
 from app.config import settings
+from app.drift_monitor import drift_monitor
 from app.model_loader import store
 
 router = APIRouter(tags=["health"])
@@ -145,3 +146,9 @@ def debug():
         "total_synergy_pairs": len(store.synergy_matrix),
         "cache_stats": draft_cache.stats(),
     }
+
+
+@router.get("/monitoring/drift")
+def monitoring_drift():
+    """Return JSON rolling drift and calibration metrics."""
+    return drift_monitor.compute_metrics()
