@@ -1719,13 +1719,47 @@ export default function Dota2Drafter() {
                               {isEasy ? "★ Beginner" : "Moderate"}
                             </span>
                           </div>
+
+                          {pick.credible_interval && (
+                            <div className="rec-uncertainty-row" style={{ display: 'flex', gap: '6px', alignItems: 'center', fontSize: '11px', color: 'var(--text-secondary, #7d8da1)', marginTop: '4px' }}>
+                              <span title="95% Posterior Credible Interval on Win Probability" style={{ background: 'rgba(255, 255, 255, 0.05)', padding: '1px 5px', borderRadius: '3px', border: '1px solid rgba(255,255,255,0.1)' }}>
+                                95% CI: {(pick.credible_interval[0] * 100).toFixed(1)}% – {(pick.credible_interval[1] * 100).toFixed(1)}%
+                              </span>
+                              {pick.effective_sample_size && (
+                                <span title="Sample size in 1.4M dataset" style={{ color: 'var(--text-muted, #5a6878)' }}>
+                                  ({pick.effective_sample_size.toLocaleString()} games)
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </div>
 
                       <div className="rec-card-body">
-                        {pick.verdict && (
+                        {pick.one_liner && (
+                          <div className="rec-verdict-box" style={{ marginBottom: '6px' }}>
+                            {pick.one_liner}
+                          </div>
+                        )}
+                        {pick.verdict && !pick.one_liner && (
                           <div className="rec-verdict-box">
                             {pick.verdict}
+                          </div>
+                        )}
+
+                        {((pick.top_positive_pairings && pick.top_positive_pairings.length > 0) ||
+                          (pick.top_negative_pairings && pick.top_negative_pairings.length > 0)) && (
+                          <div className="rec-pairings-box" style={{ fontSize: '11px', background: 'rgba(0, 0, 0, 0.25)', padding: '6px 8px', borderRadius: '4px', marginBottom: '8px', borderLeft: '2px solid var(--accent-blue, #3a9ad9)' }}>
+                            {pick.top_positive_pairings && pick.top_positive_pairings.map((p, pIdx) => (
+                              <div key={`pos-${pIdx}`} style={{ color: '#4fae3a', marginBottom: '2px' }}>
+                                ▲ {p.text}
+                              </div>
+                            ))}
+                            {pick.top_negative_pairings && pick.top_negative_pairings.map((p, pIdx) => (
+                              <div key={`neg-${pIdx}`} style={{ color: '#d9482b' }}>
+                                ▼ {p.text}
+                              </div>
+                            ))}
                           </div>
                         )}
 
