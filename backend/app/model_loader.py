@@ -7,6 +7,12 @@ from typing import Any, Dict, List, Optional, Tuple
 from app.config import settings
 from app.logger import get_logger
 
+try:
+    import torch
+    HAS_TORCH = True
+except ImportError:
+    HAS_TORCH = False
+
 log = get_logger("dota-api.model-loader")
 
 
@@ -29,6 +35,7 @@ class ModelStore:
             'intercept': 0.1035,
         }
         self.ml_model: Any = None
+        self.embedding_model: Any = None
         self.id_to_name: Dict[int, str] = {}
         self.name_to_id: Dict[str, int] = {}
         self.sorted_hero_ids: List[int] = []
@@ -94,6 +101,31 @@ class ModelStore:
             new_avg = _safe_load("hero_avg_matchup.pkl", required=False) or {}
             new_winrate = _safe_load("hero_winrate.pkl", required=False) or {}
 
+            # Optional hero embedding model (CPU PyTorch / TorchScript)
+            new_embedding_model = None
+            if HAS_TORCH:
+                traced_path = os.path.join(target_dir, "embedding_model_traced.pt")
+                weights_path = os.path.join(target_dir, "embedding_model.pt")
+                if os.path.exists(traced_path):
+                    try:
+                        new_embedding_model = torch.jit.load(traced_path, map_location="cpu")
+                        new_embedding_model.eval()
+                        log.info(f"Loaded TorchScript embedding model from {traced_path}")
+                    except Exception as e:
+                        log.warning(f"Could not load TorchScript embedding model: {e}")
+                        new_embedding_model = None
+                elif os.path.exists(weights_path):
+                    try:
+                        from ml_pipeline.embedding_model import HeroEmbeddingDeepSet
+                        emb_net = HeroEmbeddingDeepSet(num_heroes=len(new_hero_map), embedding_dim=32)
+                        emb_net.load_state_dict(torch.load(weights_path, map_location="cpu"))
+                        emb_net.eval()
+                        new_embedding_model = emb_net
+                        log.info(f"Loaded PyTorch embedding model from {weights_path}")
+                    except Exception as e:
+                        log.warning(f"Could not load PyTorch embedding model: {e}")
+                        new_embedding_model = None
+
             # Metadata.json
             meta_path = os.path.join(target_dir, "metadata.json")
             if not os.path.exists(meta_path):
@@ -126,6 +158,7 @@ class ModelStore:
             self.synergy_samples = new_synergy_samples
             self.hero_roles = new_roles
             self.ml_model = new_ml_model
+            self.embedding_model = new_embedding_model
             self.hero_avg_matchup = new_avg
             self.hero_winrate = new_winrate
             if new_weights:
