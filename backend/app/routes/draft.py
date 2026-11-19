@@ -88,6 +88,9 @@ def suggest(request: Request, req: DraftRequest, response: Response):
         reasons, reason_details, hero_conf, hero_samples, one_liner = scoring.build_reasons_and_details(
             hero_id, enemy_ids, enemy_names, ally_ids, ally_names, target_role=target_role
         )
+        ci, ci_w, eff_n, top_pos, top_neg = scoring.compute_uncertainty_and_pairings(
+            hero_id, score, enemy_ids, enemy_names, ally_ids, ally_names, hero_samples
+        )
         sug = HeroSuggestion(
             id=hero_id,
             name=hero_name,
@@ -100,6 +103,11 @@ def suggest(request: Request, req: DraftRequest, response: Response):
             roles=scoring.get_roles(hero_id),
             difficulty=get_hero_difficulty(hero_name),
             overview=get_hero_overview(hero_name),
+            credible_interval=ci,
+            credible_interval_width=ci_w,
+            effective_sample_size=eff_n,
+            top_positive_pairings=top_pos,
+            top_negative_pairings=top_neg
         )
         suggestion_cache[cache_key] = sug
         return sug

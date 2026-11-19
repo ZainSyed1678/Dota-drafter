@@ -1,3 +1,4 @@
+import math
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
@@ -510,3 +511,69 @@ def build_reasons_and_details(
         one_liner = f"{hero_name}: {overview.split('.')[0].strip()}."
 
     return reasons, details, primary_confidence, primary_sample_size, one_liner
+
+
+def compute_uncertainty_and_pairings(
+    hero_id: int,
+    score: float,
+    enemy_ids: List[int],
+    enemy_names: List[str],
+    ally_ids: List[int],
+    ally_names: List[str],
+    primary_sample_size: int
+) -> Tuple[Tuple[float, float], float, int, List[dict], List[dict]]:
+    """
+    Compute 95% posterior credible interval on win probability,
+    and extract top-2 positive and top-2 negative contributing pairings
+    grounded in actual 1.4M dataset counts.
+    """
+    p = float(np.clip(0.50 + score, 0.05, 0.95))
+    eff_n = max(10, primary_sample_size)
+    se = math.sqrt((p * (1.0 - p)) / (eff_n + 1.0))
+    w = 3.92 * se
+    ci = (round(max(0.0, p - 1.96 * se), 4), round(min(1.0, p + 1.96 * se), 4))
+    ci_w = round(w, 4)
+
+    pos_pairings = []
+    neg_pairings = []
+
+    # Check matchups vs enemies
+    for eid, ename in zip(enemy_ids, enemy_names):
+        wr = store.matchup_matrix.get((hero_id, eid))
+        if wr is None:
+            rev = store.matchup_matrix.get((eid, hero_id))
+            wr = (1.0 - rev) if rev is not None else 0.50
+        games = store.matchup_samples.get((hero_id, eid), 0)
+        item = {
+            "pairing_type": "matchup",
+            "target_hero": ename,
+            "winrate": round(float(wr), 4),
+            "games": int(games),
+            "text": f"{wr:.1%} vs {ename} across {games:,} games" if games > 0 else f"{wr:.1%} vs {ename}"
+        }
+        if wr > 0.50:
+            pos_pairings.append(item)
+        elif wr < 0.50:
+            neg_pairings.append(item)
+
+    # Check synergies with allies
+    for aid, aname in zip(ally_ids, ally_names):
+        pair = (min(hero_id, aid), max(hero_id, aid))
+        wr = store.synergy_matrix.get(pair, 0.50)
+        games = store.synergy_samples.get(pair, 0)
+        item = {
+            "pairing_type": "synergy",
+            "target_hero": aname,
+            "winrate": round(float(wr), 4),
+            "games": int(games),
+            "text": f"{wr:.1%} with {aname} across {games:,} games" if games > 0 else f"{wr:.1%} with {aname}"
+        }
+        if wr > 0.50:
+            pos_pairings.append(item)
+        elif wr < 0.50:
+            neg_pairings.append(item)
+
+    pos_pairings.sort(key=lambda x: x["winrate"], reverse=True)
+    neg_pairings.sort(key=lambda x: x["winrate"], reverse=False)
+
+    return ci, ci_w, eff_n, pos_pairings[:2], neg_pairings[:2]
