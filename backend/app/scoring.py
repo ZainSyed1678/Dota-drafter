@@ -205,6 +205,58 @@ def compute_model_win_prob(candidate_id: int, enemy_ids: List[int], ally_ids: Li
         return 0.50
 
 
+def compute_embedding_win_prob(candidate_id: int, enemy_ids: List[int], ally_ids: List[int]) -> float:
+    """Compute win probability using the HeroEmbeddingDeepSet neural network."""
+    if store.embedding_model is None:
+        return 0.50
+    try:
+        import torch
+        team = list(ally_ids) + [candidate_id]
+        hero_to_idx = store.hero_to_idx
+        num_heroes = len(hero_to_idx)
+
+        rad_slots = [0] * 5
+        for i, hid in enumerate(team[:5]):
+            if hid in hero_to_idx:
+                rad_slots[i] = hero_to_idx[hid] + 1
+
+        dire_slots = [0] * 5
+        for i, hid in enumerate(enemy_ids[:5]):
+            if hid in hero_to_idx:
+                dire_slots[i] = hero_to_idx[hid] + 1
+
+        n_r = len(team)
+        n_d = len(enemy_ids)
+        tot = n_r + n_d
+        r_wr = float(np.mean([store.hero_winrate.get(h, 0.50) for h in team])) if team else 0.50
+        d_wr = float(np.mean([store.hero_winrate.get(h, 0.50) for h in enemy_ids])) if enemy_ids else 0.50
+
+        state_feat = [
+            n_r / 5.0,
+            n_d / 5.0,
+            (n_r - n_d) / 5.0,
+            tot / 10.0,
+            r_wr,
+            d_wr,
+            r_wr - d_wr
+        ]
+
+        rad_t = torch.tensor([rad_slots], dtype=torch.long)
+        dire_t = torch.tensor([dire_slots], dtype=torch.long)
+        state_t = torch.tensor([state_feat], dtype=torch.float32)
+
+        with torch.no_grad():
+            if hasattr(store.embedding_model, "predict_proba"):
+                prob = store.embedding_model.predict_proba(rad_t, dire_t, state_t).item()
+            else:
+                out = store.embedding_model(rad_t, dire_t, state_t)
+                prob = torch.sigmoid(out).item()
+        return float(prob)
+    except Exception as e:
+        log.warning(f"Error computing embedding model probability: {e}")
+        return 0.50
+
+
 def predict(hero_id: int, enemy_ids: List[int], ally_ids: List[int], engine: str = None) -> float:
     if engine is None:
         engine = settings.PREDICTION_ENGINE
@@ -218,6 +270,8 @@ def predict(hero_id: int, enemy_ids: List[int], ally_ids: List[int], engine: str
     w_s = store.combiner_weights.get('synergy', 1.5120)
     w_w = store.combiner_weights.get('winrate', 0.9607)
     w_p = store.combiner_weights.get('model', 2.2110)
+    w_emb = store.combiner_weights.get('embedding', 0.0)
+    has_emb = store.combiner_weights.get('has_embedding', False)
 
     if engine == "ml":
         return compute_model_win_prob(hero_id, enemy_ids, ally_ids)
@@ -230,6 +284,9 @@ def predict(hero_id: int, enemy_ids: List[int], ally_ids: List[int], engine: str
 
     p_model = compute_model_win_prob(hero_id, enemy_ids, ally_ids)
     score = (w_m * m) + (w_s * s) + (w_w * w_diff) + (w_p * (p_model - 0.50))
+    if has_emb and store.embedding_model is not None and w_emb != 0.0:
+        p_emb = compute_embedding_win_prob(hero_id, enemy_ids, ally_ids)
+        score += w_emb * (p_emb - 0.50)
     return score
 
 
@@ -368,7 +425,7 @@ def build_reasons_and_details(
             "how_and_why": f"{hero_name} maintains a strong {wr:.1%} overall winrate, making them an inherently high-value pick in the current meta.",
             "key_abilities": [],
             "beginner_tip": "A very forgiving pick with strong fundamental stats and reliable execution.",
-            "sample_size": int(round(sample_size)) if sample_size else 0,
+            "sample_size": int(round(primary_sample_size)) if primary_sample_size else 0,
             "confidence": "high"
         })
 
