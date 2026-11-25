@@ -1,0 +1,54 @@
+{
+  "version": "v2026.11.25",
+  "trained_at": "2026-11-25T10:53:01.603171",
+  "git_commit": "3c4139f",
+  "data_freshness": {
+    "latest_match_id": 9104814556,
+    "latest_patch": "7.35f",
+    "match_count": 99824,
+    "training_matches": 69876,
+    "validation_matches": 14973,
+    "test_matches": 14975,
+    "latest_match_timestamp": "2026-11-25T10:53:01.603161"
+  },
+  "config": {
+    "recency": {
+      "decay_type": "patch_exponential",
+      "lambda_time": 0.2,
+      "patch_weights": {
+        "7.35f": 1.0,
+        "7.35d": 0.85,
+        "7.35c": 0.7,
+        "7.35b": 0.5,
+        "7.35": 0.35,
+        "older": 0.2
+      },
+      "default_patch_weight": 0.5
+    },
+    "shrinkage": {
+      "k_matchup": 20.0,
+      "k_synergy": 20.0
+    },
+    "splits": {
+      "train_ratio": 0.7,
+      "val_ratio": 0.15,
+      "test_ratio": 0.15
+    }
+  },
+  "learned_weights": {
+    "matchup": 3.7893552439263116,
+    "synergy": 1.9715591274328568,
+    "winrate": 0.624602052844259,
+    "model": 2.348585791873119,
+    "intercept": -0.01689391360351761,
+    "k_matchup": 20.0,
+    "k_synergy": 20.0,
+    "recency_lambda": 0.2
+  },
+  "test_metrics": {
+    "accuracy": 0.5522,
+    "log_loss": 0.6842,
+    "roc_auc": 0.5746,
+    "brier_score": 0.2455
+  }
+}
